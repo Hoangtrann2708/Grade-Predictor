@@ -1,10 +1,500 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Grade Predictor</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <h1>Grade Predictor 🎓</h1>
-    <p>Welcome! The app is working.</p>
+
+<!-- Header -->
+<div class="header">
+    <div class="header-bg"></div>
+    <div class="header-content">
+        <div class="header-emoji">🎓</div>
+        <h1 class="header-title">GRADE PREDICTOR</h1>
+        <p class="header-sub">Predict your grade &bull; Custom thresholds &bull; Curve grading</p>
+    </div>
+</div>
+
+<div class="container">
+
+    <!-- ═══════════ GRADING MODE SELECTOR (full width) ═══════════ -->
+    <div class="card">
+        <div class="section-label"><span class="dot dot-purple"></span> Grading Mode</div>
+        <div class="mode-toggle">
+            <button id="btn-custom" class="mode-btn active" onclick="setMode('custom_score')">
+                <span class="mode-icon">📊</span>
+                <span class="mode-text">
+                    <strong>Custom Score</strong>
+                    <small>Set your own A/B/C/D thresholds</small>
+                </span>
+            </button>
+            <button id="btn-curve" class="mode-btn" onclick="setMode('curve')">
+                <span class="mode-icon">📈</span>
+                <span class="mode-text">
+                    <strong>Curve / Percentile</strong>
+                    <small>Grade based on class distribution</small>
+                </span>
+            </button>
+        </div>
+    </div>
+
+    <!-- ═══════════ TWO COLUMN LAYOUT ═══════════ -->
+    <div class="grid-2">
+
+        <!-- LEFT COLUMN -->
+        <div>
+            <div class="card">
+                <div class="section-label-row">
+                    <div><span class="dot dot-blue"></span> <span class="section-label-text">Input Requirements</span></div>
+                    <button class="add-btn" onclick="addRequirement()">+ Add Requirement</button>
+                </div>
+                <div id="requirements-list"></div>
+                <p class="section-desc" id="requirements-hint">Start empty. Add your own items like Midterm (20%), Final (50%), Project (30%).</p>
+            </div>
+
+            <div class="card">
+                <div class="section-label-row">
+                    <div><span class="dot dot-teal"></span> <span class="section-label-text">Optional Improvement Factors</span></div>
+                    <button class="add-btn" onclick="addFactor()">+ Add Factor</button>
+                </div>
+                <div id="custom-factors"></div>
+                <p class="section-desc" id="factor-hint">Optional only. Currently recognized: study hours, attendance, sleep hours, past GPA.</p>
+            </div>
+        </div>
+
+        <!-- RIGHT COLUMN -->
+        <div>
+            <div class="card" id="section-custom">
+                <div class="section-label"><span class="dot dot-green"></span> Grade Thresholds</div>
+                <p class="section-desc">Set the minimum score for each grade (your professor's scale)</p>
+                <div class="threshold-grid">
+                    <div class="threshold-item">
+                        <span class="threshold-letter grade-a">A</span>
+                        <span class="threshold-geq">≥</span>
+                        <input type="number" id="threshold_a" value="90" min="0" max="100" class="threshold-input">
+                    </div>
+                    <div class="threshold-item">
+                        <span class="threshold-letter grade-b">B</span>
+                        <span class="threshold-geq">≥</span>
+                        <input type="number" id="threshold_b" value="80" min="0" max="100" class="threshold-input">
+                    </div>
+                    <div class="threshold-item">
+                        <span class="threshold-letter grade-c">C</span>
+                        <span class="threshold-geq">≥</span>
+                        <input type="number" id="threshold_c" value="70" min="0" max="100" class="threshold-input">
+                    </div>
+                    <div class="threshold-item">
+                        <span class="threshold-letter grade-d">D</span>
+                        <span class="threshold-geq">≥</span>
+                        <input type="number" id="threshold_d" value="60" min="0" max="100" class="threshold-input">
+                    </div>
+                </div>
+            </div>
+
+            <div class="card hidden" id="section-curve">
+                <div class="section-label"><span class="dot dot-orange"></span> Curve Settings</div>
+                <p class="section-desc">Set grade distribution % and class statistics from your professor</p>
+
+                <div class="sub-label">Grade Distribution</div>
+                <div class="curve-grid">
+                    <div class="curve-item">
+                        <span class="threshold-letter grade-a">A</span>
+                        <span class="curve-label">Top</span>
+                        <input type="number" id="pct_a" value="30" min="0" max="100" class="curve-input">
+                        <span class="curve-pct">%</span>
+                    </div>
+                    <div class="curve-item">
+                        <span class="threshold-letter grade-b">B</span>
+                        <span class="curve-label">Next</span>
+                        <input type="number" id="pct_b" value="40" min="0" max="100" class="curve-input">
+                        <span class="curve-pct">%</span>
+                    </div>
+                    <div class="curve-item">
+                        <span class="threshold-letter grade-c">C</span>
+                        <span class="curve-label">Next</span>
+                        <input type="number" id="pct_c" value="20" min="0" max="100" class="curve-input">
+                        <span class="curve-pct">%</span>
+                    </div>
+                    <div class="curve-item">
+                        <span class="threshold-letter grade-d">D/F</span>
+                        <span class="curve-label">Rest</span>
+                        <input type="text" id="pct_d_display" class="curve-input" disabled value="10">
+                        <span class="curve-pct">%</span>
+                    </div>
+                </div>
+                <div id="pct-warning" class="pct-warning hidden">⚠️ Total must equal 100%</div>
+
+                <div class="sub-label" style="margin-top: 20px;">Class Statistics <span class="hint">(from your professor)</span></div>
+                <div class="stats-grid">
+                    <div class="input-group">
+                        <label>📊 Class Average</label>
+                        <input type="number" id="class_avg" min="0" max="100" step="0.1" placeholder="e.g. 72.5">
+                    </div>
+                    <div class="input-group">
+                        <label>📏 Std Deviation</label>
+                        <input type="number" id="class_sd" min="0" max="50" step="0.1" placeholder="e.g. 12">
+                    </div>
+                    <div class="input-group">
+                        <label>📐 Median</label>
+                        <input type="number" id="class_median" min="0" max="100" step="0.1" placeholder="e.g. 74">
+                    </div>
+                </div>
+            </div>
+
+            <div class="card" id="section-class-stats-optional">
+                <div class="section-label"><span class="dot dot-orange"></span> Class Stats <span class="hint">(optional — compare with class)</span></div>
+                <div class="stats-grid">
+                    <div class="input-group">
+                        <label>📊 Class Average</label>
+                        <input type="number" id="class_avg_opt" min="0" max="100" step="0.1" placeholder="e.g. 72.5">
+                    </div>
+                    <div class="input-group">
+                        <label>📏 Std Deviation</label>
+                        <input type="number" id="class_sd_opt" min="0" max="50" step="0.1" placeholder="e.g. 12">
+                    </div>
+                    <div class="input-group">
+                        <label>📐 Median</label>
+                        <input type="number" id="class_median_opt" min="0" max="100" step="0.1" placeholder="e.g. 74">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <button class="predict-btn" onclick="submitPrediction()">PREDICT MY GRADE</button>
+
+    <div id="results" class="hidden">
+        <div class="results-grid">
+            <div class="result-card" id="result-grade-card">
+                <div class="result-emoji" id="result-emoji">🌟</div>
+                <div class="result-grade" id="result-grade">A</div>
+                <div class="result-message" id="result-message">Excellent!</div>
+                <div class="result-score-ring">
+                    <svg width="160" height="160">
+                        <circle cx="80" cy="80" r="68" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="8"/>
+                        <circle id="score-ring" cx="80" cy="80" r="68" fill="none" stroke="#10b981"
+                                stroke-width="8" stroke-linecap="round"
+                                stroke-dasharray="427.26" stroke-dashoffset="427.26"
+                                transform="rotate(-90 80 80)"/>
+                    </svg>
+                    <div class="ring-text">
+                        <span class="ring-score" id="ring-score">0</span>
+                        <span class="ring-label">PREDICTED</span>
+                    </div>
+                </div>
+                <div class="needed-for-a hidden" id="needed-for-a">
+                    You need <strong id="needed-pts">+0</strong> points to reach an A
+                </div>
+            </div>
+
+            <div>
+                <div class="card hidden no-mb" id="result-comparison" style="margin-bottom:16px">
+                    <div class="section-label"><span class="dot dot-blue"></span> Class Comparison</div>
+                    <div class="comparison-grid">
+                        <div class="comp-item">
+                            <div class="comp-value" id="comp-percentile">—</div>
+                            <div class="comp-label">Percentile</div>
+                        </div>
+                        <div class="comp-item">
+                            <div class="comp-value" id="comp-vs-avg">—</div>
+                            <div class="comp-label">vs Average</div>
+                        </div>
+                        <div class="comp-item">
+                            <div class="comp-value" id="comp-vs-median">—</div>
+                            <div class="comp-label">vs Median</div>
+                        </div>
+                        <div class="comp-item">
+                            <div class="comp-value" id="comp-zscore">—</div>
+                            <div class="comp-label">Z-Score</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card" id="result-scale">
+                    <div class="section-label"><span class="dot dot-purple"></span> Your Grade Scale</div>
+                    <div class="scale-pills" id="scale-pills"></div>
+                </div>
+
+                <div class="card hidden" id="result-curve-details">
+                    <div class="section-label"><span class="dot dot-orange"></span> Curve Breakdown</div>
+                    <div class="curve-breakdown" id="curve-breakdown"></div>
+                </div>
+            </div>
+
+            <div class="card full-width" id="result-tips">
+                <div class="section-label"><span class="dot dot-teal"></span> Personalized Tips</div>
+                <div id="tips-container"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentMode = 'custom_score';
+let factorCount = 0;
+let requirementCount = 0;
+
+function setMode(mode) {
+    currentMode = mode;
+    document.getElementById('btn-custom').classList.toggle('active', mode === 'custom_score');
+    document.getElementById('btn-curve').classList.toggle('active', mode === 'curve');
+    document.getElementById('section-custom').classList.toggle('hidden', mode !== 'custom_score');
+    document.getElementById('section-curve').classList.toggle('hidden', mode !== 'curve');
+    document.getElementById('section-class-stats-optional').classList.toggle('hidden', mode !== 'custom_score');
+    updateCurveRemainder();
+}
+
+['pct_a', 'pct_b', 'pct_c'].forEach(id => {
+    document.getElementById(id).addEventListener('input', updateCurveRemainder);
+});
+
+function updateCurveRemainder() {
+    const a = parseFloat(document.getElementById('pct_a').value) || 0;
+    const b = parseFloat(document.getElementById('pct_b').value) || 0;
+    const c = parseFloat(document.getElementById('pct_c').value) || 0;
+    const remainder = 100 - a - b - c;
+    document.getElementById('pct_d_display').value = remainder;
+    document.getElementById('pct-warning').classList.toggle('hidden', remainder >= 0 && remainder <= 100);
+}
+
+function addRequirement() {
+    requirementCount++;
+    const div = document.createElement('div');
+    div.className = 'requirement-row';
+    div.id = `requirement-${requirementCount}`;
+    div.innerHTML = `
+        <input type="text" placeholder="e.g. Midterm" class="requirement-name">
+        <input type="number" placeholder="Score" min="0" max="100" step="0.1" class="requirement-score">
+        <input type="number" placeholder="Weight %" min="0" max="100" step="0.1" class="requirement-weight">
+        <button class="factor-remove" onclick="removeRequirement(${requirementCount})">×</button>
+    `;
+    document.getElementById('requirements-list').appendChild(div);
+    document.getElementById('requirements-hint').style.display = 'none';
+}
+
+function removeRequirement(id) {
+    document.getElementById(`requirement-${id}`).remove();
+    if (document.getElementById('requirements-list').children.length === 0) {
+        document.getElementById('requirements-hint').style.display = 'block';
+    }
+}
+
+function addFactor() {
+    factorCount++;
+    const div = document.createElement('div');
+    div.className = 'factor-row';
+    div.id = `factor-${factorCount}`;
+    div.innerHTML = `
+        <input type="text" placeholder="e.g. Sleep hours" class="factor-name">
+        <input type="number" placeholder="Value" class="factor-value">
+        <button class="factor-remove" onclick="removeFactor(${factorCount})">×</button>
+    `;
+    document.getElementById('custom-factors').appendChild(div);
+    document.getElementById('factor-hint').style.display = 'none';
+}
+
+function removeFactor(id) {
+    document.getElementById(`factor-${id}`).remove();
+    if (document.getElementById('custom-factors').children.length === 0) {
+        document.getElementById('factor-hint').style.display = 'block';
+    }
+}
+
+async function submitPrediction() {
+    let study = 4.0;
+    let attend = 85.0;
+    let assign = 75.0;
+    let past_gpa = 2.8;
+    let sleep_hours = 7.0;
+
+    const requirements = [];
+    let weightedTotal = 0;
+    let totalWeight = 0;
+    const reqRows = document.querySelectorAll('.requirement-row');
+    reqRows.forEach(row => {
+        const name = row.querySelector('.requirement-name').value.trim() || 'Unnamed';
+        const score = parseFloat(row.querySelector('.requirement-score').value);
+        const weight = parseFloat(row.querySelector('.requirement-weight').value);
+        if (!isNaN(score) && !isNaN(weight) && weight > 0) {
+            requirements.push({ name, score, weight });
+            weightedTotal += score * weight;
+            totalWeight += weight;
+        }
+    });
+    if (totalWeight > 0) {
+        assign = weightedTotal / totalWeight;
+    }
+
+    const factors = document.querySelectorAll('.factor-row');
+    factors.forEach(f => {
+        const name = f.querySelector('.factor-name').value.toLowerCase();
+        const val  = parseFloat(f.querySelector('.factor-value').value) || 0;
+        if (name.includes('study')) study = val;
+        if (name.includes('attendance') || name.includes('attend')) attend = val;
+        if (name.includes('gpa') || name.includes('past')) past_gpa = val;
+        if (name.includes('sleep')) sleep_hours = val;
+    });
+
+    const payload = {
+        study_hours: study, attendance: attend, assignment_avg: assign,
+        past_gpa, sleep_hours, grading_mode: currentMode,
+        requirements,
+        requirements_weight_sum: totalWeight,
+    };
+
+    if (currentMode === 'custom_score') {
+        payload.threshold_a = parseFloat(document.getElementById('threshold_a').value) || 90;
+        payload.threshold_b = parseFloat(document.getElementById('threshold_b').value) || 80;
+        payload.threshold_c = parseFloat(document.getElementById('threshold_c').value) || 70;
+        payload.threshold_d = parseFloat(document.getElementById('threshold_d').value) || 60;
+        const avg = document.getElementById('class_avg_opt').value;
+        if (avg) {
+            payload.class_avg    = parseFloat(avg);
+            payload.class_sd     = parseFloat(document.getElementById('class_sd_opt').value) || 10;
+            payload.class_median = parseFloat(document.getElementById('class_median_opt').value) || parseFloat(avg);
+        }
+    } else {
+        payload.pct_a        = parseFloat(document.getElementById('pct_a').value) || 30;
+        payload.pct_b        = parseFloat(document.getElementById('pct_b').value) || 40;
+        payload.pct_c        = parseFloat(document.getElementById('pct_c').value) || 20;
+        payload.class_avg    = parseFloat(document.getElementById('class_avg').value) || 75;
+        payload.class_sd     = parseFloat(document.getElementById('class_sd').value) || 10;
+        payload.class_median = parseFloat(document.getElementById('class_median').value) || 75;
+    }
+
+    try {
+        const res  = await fetch('/predict', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        displayResults(data, study, attend, assign, totalWeight);
+    } catch (err) {
+        alert('Error connecting to server!');
+        console.error(err);
+    }
+}
+
+function displayResults(data, study, attend, assign, requirementWeightSum) {
+    document.getElementById('results').classList.remove('hidden');
+
+    const gradeColors = { A: '#10b981', B: '#3b82f6', C: '#f59e0b', D: '#ef4444', F: '#991b1b' };
+    const gradeEmojis = { A: '🌟', B: '💪', C: '⚡', D: '⚠️', F: '❌' };
+    const color = gradeColors[data.grade_letter] || '#6366f1';
+    const emoji = gradeEmojis[data.grade_letter] || '📊';
+
+    document.getElementById('result-emoji').textContent = emoji;
+    document.getElementById('result-grade').textContent = data.grade_letter;
+    document.getElementById('result-grade').style.color = color;
+    document.getElementById('result-message').textContent = data.message;
+    document.getElementById('result-grade-card').style.borderColor = color + '40';
+    document.getElementById('result-grade-card').style.background = `linear-gradient(135deg, ${color}12, ${color}06)`;
+
+    const circ = 2 * Math.PI * 68;
+    const offset = circ - (data.prediction / 100) * circ;
+    const ring = document.getElementById('score-ring');
+    ring.style.stroke = color;
+    ring.style.strokeDashoffset = String(circ);
+    setTimeout(() => { ring.style.strokeDashoffset = offset; }, 50);
+    document.getElementById('ring-score').textContent = data.prediction;
+
+    if (data.needed_for_a > 0) {
+        document.getElementById('needed-for-a').classList.remove('hidden');
+        document.getElementById('needed-pts').textContent = `+${data.needed_for_a}`;
+    } else {
+        document.getElementById('needed-for-a').classList.add('hidden');
+    }
+
+    if (data.percentile !== undefined) {
+        document.getElementById('result-comparison').classList.remove('hidden');
+        document.getElementById('comp-percentile').textContent = data.percentile + '%';
+        const diffAvg = data.diff_from_avg;
+        document.getElementById('comp-vs-avg').textContent = (diffAvg >= 0 ? '+' : '') + diffAvg;
+        document.getElementById('comp-vs-avg').style.color = diffAvg >= 0 ? '#10b981' : '#ef4444';
+        const diffMed = data.diff_from_median;
+        document.getElementById('comp-vs-median').textContent = (diffMed >= 0 ? '+' : '') + diffMed;
+        document.getElementById('comp-vs-median').style.color = diffMed >= 0 ? '#10b981' : '#ef4444';
+        document.getElementById('comp-zscore').textContent = data.z_score;
+    } else {
+        document.getElementById('result-comparison').classList.add('hidden');
+    }
+
+    if (data.grading_mode === 'curve') {
+        document.getElementById('result-curve-details').classList.remove('hidden');
+        document.getElementById('result-scale').classList.add('hidden');
+        const container = document.getElementById('curve-breakdown');
+        container.innerHTML = `
+            <div class="curve-bar-container">
+                <div class="curve-bar-segment grade-a-bg" style="width:${data.pct_a}%"><span>A</span><small>${data.pct_a}%</small><div class="curve-score-label">≥${data.score_for_a}</div></div>
+                <div class="curve-bar-segment grade-b-bg" style="width:${data.pct_b}%"><span>B</span><small>${data.pct_b}%</small><div class="curve-score-label">≥${data.score_for_b}</div></div>
+                <div class="curve-bar-segment grade-c-bg" style="width:${data.pct_c}%"><span>C</span><small>${data.pct_c}%</small><div class="curve-score-label">≥${data.score_for_c}</div></div>
+                <div class="curve-bar-segment grade-d-bg" style="width:${100 - data.pct_a - data.pct_b - data.pct_c}%"><span>D/F</span><small>${100 - data.pct_a - data.pct_b - data.pct_c}%</small></div>
+            </div>
+            <div class="curve-your-pos">Your score <strong>${data.prediction}</strong> puts you at the <strong style="color:${color}">${data.percentile}th percentile</strong> → Grade: <strong style="color:${color}">${data.grade_letter}</strong></div>
+            <div class="curve-stats-summary"><span>Class avg: <strong>${data.class_avg}</strong></span><span>SD: <strong>${data.class_sd}</strong></span><span>Median: <strong>${data.class_median}</strong></span></div>
+        `;
+    } else {
+        document.getElementById('result-curve-details').classList.add('hidden');
+        document.getElementById('result-scale').classList.remove('hidden');
+        const pills = document.getElementById('scale-pills');
+        const thresholds = [
+            { g: 'A', min: data.threshold_a }, { g: 'B', min: data.threshold_b },
+            { g: 'C', min: data.threshold_c }, { g: 'D', min: data.threshold_d }, { g: 'F', min: 0 },
+        ];
+        pills.innerHTML = thresholds.map(t =>
+            `<span class="scale-pill" style="${data.grade_letter === t.g ? 'background:'+color+';color:white;border-color:'+color : ''}">${t.g} ${t.min}+</span>`
+        ).join('');
+    }
+
+    const tips = generateTips(study, attend, assign, data, requirementWeightSum);
+    document.getElementById('tips-container').innerHTML = tips.map(t =>
+        `<div class="tip-card"><div class="tip-title">${t.icon} ${t.title}</div><div class="tip-text">${t.text}</div></div>`
+    ).join('');
+
+    setTimeout(() => document.getElementById('results').scrollIntoView({ behavior: 'smooth' }), 100);
+}
+
+function generateTips(study, attend, assign, data, requirementWeightSum) {
+    const tips = [];
+    if (requirementWeightSum > 0) {
+        tips.push({
+            icon:'🧮',
+            title:'Requirements Used',
+            text:`Your added requirements were used as a weighted score input (total weight: ${requirementWeightSum.toFixed(1)}%).`
+        });
+    } else {
+        tips.push({
+            icon:'🧩',
+            title:'Add Your Course Components',
+            text:'No midterm/final/project items yet. Add them in Input Requirements to make prediction closer to your course structure.'
+        });
+    }
+    if (study < 3) tips.push({ icon:'📚', title:'Increase Study Hours', text:`You're studying ${study}h/day. Aim for 3–4h. Try the Pomodoro technique.` });
+    else if (study < 5) tips.push({ icon:'📚', title:'Good Study Habit', text:`${study}h/day is decent. Add 1 more focused hour with active recall.` });
+    else tips.push({ icon:'📚', title:'Strong Study Routine', text:`${study}h/day is excellent! Vary your techniques: flashcards, practice problems, teaching others.` });
+
+    if (attend < 70) tips.push({ icon:'🏫', title:'Attendance is Critical', text:`At ${attend}%, you're missing too much. Aim for 85%+.` });
+    else if (attend < 85) tips.push({ icon:'🏫', title:'Improve Attendance', text:`${attend}% is okay but students with 90%+ score 15–20% higher.` });
+    else tips.push({ icon:'🏫', title:'Great Attendance!', text:`${attend}% — showing up consistently!` });
+
+    if (assign < 70) tips.push({ icon:'📝', title:'Focus on Assignments', text:`Score of ${assign} is below average. Start early, visit office hours.` });
+    else if (assign < 85) tips.push({ icon:'📝', title:'Boost Assignment Quality', text:`${assign} is good but there's room. Double-check before submitting.` });
+    else tips.push({ icon:'📝', title:'Excellent Assignments!', text:`${assign} — outstanding! Consider helping peers to reinforce learning.` });
+
+    if (data.diff_from_avg !== undefined) {
+        if (data.diff_from_avg > 5) tips.push({ icon:'📈', title:'Above Class Average', text:`You're ${data.diff_from_avg} points above average. Strong position!` });
+        else if (data.diff_from_avg < -5) tips.push({ icon:'📉', title:'Below Class Average', text:`You're ${Math.abs(data.diff_from_avg)} points below average. Focus on weak areas.` });
+    }
+
+    return tips;
+}
+</script>
+
 </body>
 </html>
