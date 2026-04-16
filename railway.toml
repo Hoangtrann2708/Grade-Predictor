@@ -1,0 +1,6 @@
+[build]
+builder = "NIXPACKS"
+buildCommand = "pip install -r requirements.txt && python model/train_model.py"
+
+[deploy]
+startCommand = "gunicorn --bind 0.0.0.0:$PORT app:app"

@@ -166,6 +166,8 @@
 
     </div>
 
+    <div id="form-errors" class="form-error-banner hidden" role="alert" aria-live="polite"></div>
+
     <button class="predict-btn" onclick="submitPrediction()">PREDICT MY GRADE</button>
 
     <div id="results" class="hidden">
@@ -239,6 +241,33 @@ let currentMode = 'custom_score';
 let factorCount = 0;
 let requirementCount = 0;
 
+function clearFormErrors() {
+    const el = document.getElementById('form-errors');
+    el.classList.add('hidden');
+    el.innerHTML = '';
+}
+
+function showFormErrors(payload) {
+    const el = document.getElementById('form-errors');
+    const errors = Array.isArray(payload && payload.errors) ? payload.errors : [];
+    const lines = errors.length
+        ? errors.map(e => {
+            const field = e.field ? `<code>${escapeHtml(String(e.field))}</code>: ` : '';
+            return `<li>${field}${escapeHtml(String(e.message || ''))}</li>`;
+        }).join('')
+        : `<li>${escapeHtml(String((payload && payload.error) || 'Something went wrong.'))}</li>`;
+    el.innerHTML = `<div class="form-error-title">Please fix the following:</div><ul>${lines}</ul>`;
+    el.classList.remove('hidden');
+    document.getElementById('results').classList.add('hidden');
+    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function escapeHtml(s) {
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+}
+
 function setMode(mode) {
     currentMode = mode;
     document.getElementById('btn-custom').classList.toggle('active', mode === 'custom_score');
@@ -306,6 +335,8 @@ function removeFactor(id) {
 }
 
 async function submitPrediction() {
+    clearFormErrors();
+
     let study = 4.0;
     let attend = 85.0;
     let assign = 75.0;
@@ -358,6 +389,15 @@ async function submitPrediction() {
             payload.class_sd     = parseFloat(document.getElementById('class_sd_opt').value) || 10;
             payload.class_median = parseFloat(document.getElementById('class_median_opt').value) || parseFloat(avg);
         }
+        if (!(payload.threshold_a >= payload.threshold_b && payload.threshold_b >= payload.threshold_c && payload.threshold_c >= payload.threshold_d)) {
+            showFormErrors({
+                errors: [{
+                    field: 'thresholds',
+                    message: 'A threshold must be ≥ B ≥ C ≥ D (e.g. 90 / 80 / 70 / 60).'
+                }]
+            });
+            return;
+        }
     } else {
         payload.pct_a        = parseFloat(document.getElementById('pct_a').value) || 30;
         payload.pct_b        = parseFloat(document.getElementById('pct_b').value) || 40;
@@ -365,6 +405,16 @@ async function submitPrediction() {
         payload.class_avg    = parseFloat(document.getElementById('class_avg').value) || 75;
         payload.class_sd     = parseFloat(document.getElementById('class_sd').value) || 10;
         payload.class_median = parseFloat(document.getElementById('class_median').value) || 75;
+        const sum = payload.pct_a + payload.pct_b + payload.pct_c;
+        if (Math.abs(sum - 100) > 0.01) {
+            showFormErrors({
+                errors: [{
+                    field: 'pct_total',
+                    message: 'A% + B% + C% must equal 100%.'
+                }]
+            });
+            return;
+        }
     }
 
     try {
@@ -373,10 +423,21 @@ async function submitPrediction() {
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(payload)
         });
-        const data = await res.json();
+        let data;
+        try {
+            data = await res.json();
+        } catch (parseErr) {
+            showFormErrors({ errors: [{ field: '_response', message: 'Could not read server response.' }] });
+            return;
+        }
+        if (!res.ok) {
+            showFormErrors(data);
+            return;
+        }
+        clearFormErrors();
         displayResults(data, study, attend, assign, totalWeight);
     } catch (err) {
-        alert('Error connecting to server!');
+        showFormErrors({ errors: [{ field: '_network', message: 'Could not reach the server. Is the app running?' }] });
         console.error(err);
     }
 }
