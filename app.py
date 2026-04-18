@@ -1,10 +1,12 @@
 from flask import Flask, render_template, request, jsonify
 import math
 import pickle
+import time
 import numpy as np
 from scipy import stats
 
 app = Flask(__name__)
+APP_STARTED_AT = int(time.time())
 
 
 def _num_field(data, key, errors, *, label, lo, hi, default=None, required=False):
@@ -212,6 +214,15 @@ with open('model/scaler.pkl', 'rb') as f:
 @app.route('/')
 def home():
     return render_template('index.html')
+
+
+@app.route('/health', methods=['GET'])
+def health():
+    return jsonify({
+        'ok': True,
+        'status': 'up',
+        'uptime_seconds': int(time.time()) - APP_STARTED_AT,
+    })
 
 
 @app.route('/predict', methods=['POST'])
