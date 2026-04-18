@@ -56,3 +56,4 @@ Free tier services may **spin down after idle**; the first request after sleep c
 - `requirements.txt` — Python dependencies
 - `Procfile` — process type for platforms that read it (e.g. Heroku-style)
 - `runtime.txt` — Python version hint for hosts that support it
+- `DAY12_REPORT.md` — live test checklist/report template for Day 12
