@@ -126,10 +126,10 @@ def _validate_predict(data):
             data, 'class_median', errors, label='Class median', lo=0, hi=100, default=75
         )
         if curve_pct_a is not None and curve_pct_b is not None and curve_pct_c is not None:
-            if abs(curve_pct_a + curve_pct_b + curve_pct_c ) > 0.01:
+            if curve_pct_a + curve_pct_b + curve_pct_c > 100.01:
                 errors.append({
                     'field': 'pct_total',
-                    'message': 'A% + B% + C% must equal 100%.',
+                    'message': 'A% + B% + C% cannot exceed 100%. D/F is the remaining percent.',
                 })
 
     elif grading_mode == 'custom_score':

@@ -126,7 +126,7 @@
                         <span class="curve-pct">%</span>
                     </div>
                 </div>
-                <div id="pct-warning" class="pct-warning hidden">⚠️ Total must equal 100%</div>
+                <div id="pct-warning" class="pct-warning hidden">⚠️ A% + B% + C% cannot exceed 100% (D/F is the rest)</div>
 
                 <div class="sub-label" style="margin-top: 20px;">Class Statistics <span class="hint">(from your professor)</span></div>
                 <div class="stats-grid">
@@ -314,7 +314,7 @@ function updateCurveRemainder() {
     const c = parseFloat(document.getElementById('pct_c').value) || 0;
     const remainder = 100 - a - b - c;
     document.getElementById('pct_d_display').value = remainder;
-    document.getElementById('pct-warning').classList.toggle('hidden', remainder >= 0 && remainder <= 100);
+    document.getElementById('pct-warning').classList.toggle('hidden', remainder >= 0);
 }
 
 function addRequirement() {
@@ -433,11 +433,11 @@ async function submitPrediction() {
         payload.class_sd     = parseFloat(document.getElementById('class_sd').value) || 10;
         payload.class_median = parseFloat(document.getElementById('class_median').value) || 75;
         const sum = payload.pct_a + payload.pct_b + payload.pct_c;
-        if (Math.abs(sum - 100) > 0.01) {
+        if (sum > 100.01) {
             showFormErrors({
                 errors: [{
                     field: 'pct_total',
-                    message: 'A% + B% + C% must equal 100%.'
+                    message: 'A% + B% + C% cannot exceed 100%. D/F uses the remaining percent.'
                 }]
             });
             return;
