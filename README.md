@@ -7,6 +7,14 @@ Grade Predictor is a Flask + ML web app that helps students estimate their final
 
 It is built as a practical student tool, not just a model demo.
 
+## Demo
+
+- **Live Demo:** `https://grade-predictor-4lce.onrender.com`
+- **Local Demo (for instant presentation):** `http://127.0.0.1:5000`
+
+Recruiter note: This project is hosted on Render free tier.  
+The first request after inactivity may take ~30-60 seconds (cold start), then performance is normal.
+
 ## Why This Project
 
 Different classes use different grading systems:
