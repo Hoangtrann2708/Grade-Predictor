@@ -54,10 +54,10 @@
                 </div>
                 <div class="input-group">
                     <label>Default Out Of (for single-number scores)</label>
-                    <input type="number" id="score-default-total" min="1" step="0.1" value="100" placeholder="e.g. 100 or 10">
+                    <input type="number" id="score-default-total" min="1" step="0.1" value="100" placeholder="e.g. 10 or 100">
                 </div>
                 <div id="requirements-list"></div>
-                <p class="section-desc" id="requirements-hint">Score follows your selected base. Example: if Default Out Of = 10, typing 8.6 stays 8.6. You can also type 29/30 or 85%.</p>
+                <p class="section-desc" id="requirements-hint">Enter only numbers based on your selected base. If base is 10, enter scores from 0-10. If base is 100, enter scores from 0-100.</p>
             </div>
 
             <div class="card">
@@ -357,9 +357,10 @@ function addRequirement() {
     const div = document.createElement('div');
     div.className = 'requirement-row';
     div.id = `requirement-${requirementCount}`;
+    const scorePlaceholder = getScorePlaceholder(getDefaultScoreTotal());
     div.innerHTML = `
         <input type="text" placeholder="e.g. Midterm" class="requirement-name">
-        <input type="text" placeholder="Score (e.g. 29/30 or 85%)" class="requirement-score" oninput="updateRequirementPreview(${requirementCount})" onblur="normalizeRequirementScore(${requirementCount})">
+        <input type="text" placeholder="${scorePlaceholder}" class="requirement-score" oninput="updateRequirementPreview(${requirementCount})" onblur="normalizeRequirementScore(${requirementCount})">
         <input type="number" placeholder="Weight %" min="0" max="100" step="0.1" class="requirement-weight">
         <label class="extra-credit-check">
             <input type="checkbox" class="requirement-extra">
@@ -370,6 +371,20 @@ function addRequirement() {
     `;
     document.getElementById('requirements-list').appendChild(div);
     document.getElementById('requirements-hint').style.display = 'none';
+}
+
+function getScorePlaceholder(defaultTotal) {
+    const denom = Math.round(defaultTotal);
+    return `Score (0 to ${denom})`;
+}
+
+function refreshScorePlaceholdersAndPreviews() {
+    const denom = getDefaultScoreTotal();
+    document.querySelectorAll('.requirement-row').forEach((row, idx) => {
+        const input = row.querySelector('.requirement-score');
+        if (input) input.placeholder = getScorePlaceholder(denom);
+        updateRequirementPreview(idx + 1);
+    });
 }
 
 function parseScoreToPercent(rawValue, defaultTotal = 100) {
@@ -439,7 +454,8 @@ function updateRequirementPreview(id) {
     const base = parseScoreToBase(raw, getDefaultScoreTotal());
     const pct = parseScoreToPercent(raw, getDefaultScoreTotal());
     if (base === null || pct === null) {
-        preview.textContent = 'Invalid format. Use 29/30, 85%, or a plain number.';
+        const denom = getDefaultScoreTotal();
+        preview.textContent = `Invalid input. Please enter a number between 0 and ${denom} based on your selected base.`;
         preview.classList.add('preview-error');
     } else {
         const denom = getDefaultScoreTotal();
@@ -802,6 +818,7 @@ async function warmupServerHealth() {
 
 warmupServerHealth();
 toggleLetterGrades();
+document.getElementById('score-default-total').addEventListener('input', refreshScorePlaceholdersAndPreviews);
 </script>
 
 </body>
