@@ -420,7 +420,9 @@ async function submitPrediction() {
         }
     });
     if (totalWeight > 0) {
-        assign = weightedTotal / totalWeight;
+        // Match syllabus math (sum(score * weight/100)).
+        // This preserves extra-credit effect instead of normalizing by total weight.
+        assign = weightedTotal / 100;
     }
 
     const factors = document.querySelectorAll('.factor-row');
