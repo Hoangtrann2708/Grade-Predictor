@@ -100,4 +100,4 @@ This is platform behavior, not an application bug.
 - `model/train_model.py` - model training and artifact export
 - `requirements.txt` - dependencies
 - `render.yaml`, `railway.toml`, `Procfile` - deploy configuration
-- `DAY12_REPORT.md` - live test checklist/report
+- `REPORT.md` - live test checklist/report
