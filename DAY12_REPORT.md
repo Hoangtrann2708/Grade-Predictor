@@ -1,4 +1,4 @@
-# Day 12 Report - Live Testing and Fixes
+# Report - Live Testing and Fixes
 
 Use this file as your Day 12 evidence after deployment.
 
