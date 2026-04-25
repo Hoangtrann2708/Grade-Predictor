@@ -75,6 +75,10 @@
             <div class="card" id="section-custom">
                 <div class="section-label"><span class="dot dot-green"></span> Grade Thresholds</div>
                 <p class="section-desc">Set the minimum score for each grade (your professor's scale)</p>
+                <label class="extra-credit-check" style="margin-bottom: 10px; display: inline-flex;">
+                    <input type="checkbox" id="use-letter-grades" checked onchange="toggleLetterGrades()">
+                    <span>Use letter grades (A/B/C/D)</span>
+                </label>
                 <div class="threshold-grid">
                     <div class="threshold-item">
                         <span class="threshold-letter grade-a">A</span>
@@ -97,9 +101,9 @@
                         <input type="number" id="threshold_d" value="60" min="0" max="100" class="threshold-input">
                     </div>
                 </div>
-                <div class="sub-label" style="margin-top: 16px;">Advanced Grade Options</div>
+                <div class="sub-label" id="advanced-grade-label" style="margin-top: 16px;">Advanced Grade Options</div>
                 <p class="section-desc">Optional: add letter variants like A-, B+, B-. Each variant gets its own minimum score.</p>
-                <div class="grade-option-buttons">
+                <div class="grade-option-buttons" id="grade-option-buttons">
                     <button type="button" class="add-btn" onclick="addGradeVariant('A-')">+ A-</button>
                     <button type="button" class="add-btn" onclick="addGradeVariant('B+')">+ B+</button>
                     <button type="button" class="add-btn" onclick="addGradeVariant('B-')">+ B-</button>
@@ -319,6 +323,20 @@ function setMode(mode) {
     document.getElementById('section-curve').classList.toggle('hidden', mode !== 'curve');
     document.getElementById('section-class-stats-optional').classList.toggle('hidden', mode !== 'custom_score');
     updateCurveRemainder();
+    toggleLetterGrades();
+}
+
+function toggleLetterGrades() {
+    const useLetters = document.getElementById('use-letter-grades').checked;
+    const thresholdGrid = document.querySelector('#section-custom .threshold-grid');
+    const advancedLabel = document.getElementById('advanced-grade-label');
+    const advancedButtons = document.getElementById('grade-option-buttons');
+    const variants = document.getElementById('grade-variants');
+
+    thresholdGrid.classList.toggle('hidden', !useLetters);
+    advancedLabel.classList.toggle('hidden', !useLetters);
+    advancedButtons.classList.toggle('hidden', !useLetters);
+    variants.classList.toggle('hidden', !useLetters);
 }
 
 ['pct_a', 'pct_b', 'pct_c'].forEach(id => {
@@ -536,9 +554,11 @@ async function submitPrediction() {
         past_gpa, sleep_hours, grading_mode: currentMode,
         requirements,
         requirements_weight_sum: totalWeight,
+        score_scale_base: getDefaultScoreTotal(),
     };
 
     if (currentMode === 'custom_score') {
+        payload.use_letter_grades = document.getElementById('use-letter-grades').checked;
         payload.threshold_a = parseFloat(document.getElementById('threshold_a').value) || 90;
         payload.threshold_b = parseFloat(document.getElementById('threshold_b').value) || 80;
         payload.threshold_c = parseFloat(document.getElementById('threshold_c').value) || 70;
@@ -549,7 +569,7 @@ async function submitPrediction() {
             payload.class_sd     = parseFloat(document.getElementById('class_sd_opt').value) || 10;
             payload.class_median = parseFloat(document.getElementById('class_median_opt').value) || parseFloat(avg);
         }
-        if (!(payload.threshold_a >= payload.threshold_b && payload.threshold_b >= payload.threshold_c && payload.threshold_c >= payload.threshold_d)) {
+        if (payload.use_letter_grades && !(payload.threshold_a >= payload.threshold_b && payload.threshold_b >= payload.threshold_c && payload.threshold_c >= payload.threshold_d)) {
             showFormErrors({
                 errors: [{
                     field: 'thresholds',
@@ -559,22 +579,24 @@ async function submitPrediction() {
             return;
         }
 
-        const customScale = [
-            { label: 'A', min: payload.threshold_a },
-            { label: 'B', min: payload.threshold_b },
-            { label: 'C', min: payload.threshold_c },
-            { label: 'D', min: payload.threshold_d },
-            { label: 'F', min: 0 },
-        ];
-        document.querySelectorAll('.variant-input').forEach(input => {
-            const v = parseFloat(input.value);
-            const label = input.dataset.gradeLabel;
-            if (!isNaN(v) && label) {
-                customScale.push({ label, min: v });
-            }
-        });
-        customScale.sort((a, b) => b.min - a.min);
-        payload.custom_scale = customScale;
+        if (payload.use_letter_grades) {
+            const customScale = [
+                { label: 'A', min: payload.threshold_a },
+                { label: 'B', min: payload.threshold_b },
+                { label: 'C', min: payload.threshold_c },
+                { label: 'D', min: payload.threshold_d },
+                { label: 'F', min: 0 },
+            ];
+            document.querySelectorAll('.variant-input').forEach(input => {
+                const v = parseFloat(input.value);
+                const label = input.dataset.gradeLabel;
+                if (!isNaN(v) && label) {
+                    customScale.push({ label, min: v });
+                }
+            });
+            customScale.sort((a, b) => b.min - a.min);
+            payload.custom_scale = customScale;
+        }
     } else {
         payload.pct_a        = parseFloat(document.getElementById('pct_a').value) || 30;
         payload.pct_b        = parseFloat(document.getElementById('pct_b').value) || 40;
@@ -648,25 +670,28 @@ function displayResults(data, study, attend, assign, requirementWeightSum) {
 
     const gradeColors = { A: '#10b981', B: '#3b82f6', C: '#f59e0b', D: '#ef4444', F: '#991b1b' };
     const gradeEmojis = { A: '🌟', B: '💪', C: '⚡', D: '⚠️', F: '❌' };
-    const color = gradeColors[data.grade_letter] || '#6366f1';
-    const emoji = gradeEmojis[data.grade_letter] || '📊';
+    const useLetters = data.use_letter_grades !== false;
+    const color = useLetters ? (gradeColors[data.grade_letter] || '#6366f1') : '#14b8a6';
+    const emoji = useLetters ? (gradeEmojis[data.grade_letter] || '📊') : '📊';
+    const shownScore = data.prediction_display ?? data.prediction;
+    const percentScore = data.prediction_percent ?? data.prediction;
 
     document.getElementById('result-emoji').textContent = emoji;
-    document.getElementById('result-grade').textContent = data.grade_letter;
+    document.getElementById('result-grade').textContent = useLetters ? data.grade_letter : `${shownScore}`;
     document.getElementById('result-grade').style.color = color;
-    document.getElementById('result-message').textContent = data.message;
+    document.getElementById('result-message').textContent = useLetters ? data.message : `Score out of ${data.score_scale_base || 100}`;
     document.getElementById('result-grade-card').style.borderColor = color + '40';
     document.getElementById('result-grade-card').style.background = `linear-gradient(135deg, ${color}12, ${color}06)`;
 
     const circ = 2 * Math.PI * 68;
-    const offset = circ - (data.prediction / 100) * circ;
+    const offset = circ - (percentScore / 100) * circ;
     const ring = document.getElementById('score-ring');
     ring.style.stroke = color;
     ring.style.strokeDashoffset = String(circ);
     setTimeout(() => { ring.style.strokeDashoffset = offset; }, 50);
-    document.getElementById('ring-score').textContent = data.prediction;
+    document.getElementById('ring-score').textContent = shownScore;
 
-    if (data.needed_for_a > 0) {
+    if (useLetters && data.needed_for_a > 0) {
         document.getElementById('needed-for-a').classList.remove('hidden');
         document.getElementById('needed-pts').textContent = `+${data.needed_for_a}`;
     } else {
@@ -701,7 +726,7 @@ function displayResults(data, study, attend, assign, requirementWeightSum) {
             <div class="curve-your-pos">Your score <strong>${data.prediction}</strong> puts you at the <strong style="color:${color}">${data.percentile}th percentile</strong> → Grade: <strong style="color:${color}">${data.grade_letter}</strong></div>
             <div class="curve-stats-summary"><span>Class avg: <strong>${data.class_avg}</strong></span><span>SD: <strong>${data.class_sd}</strong></span><span>Median: <strong>${data.class_median}</strong></span></div>
         `;
-    } else {
+    } else if (useLetters) {
         document.getElementById('result-curve-details').classList.add('hidden');
         document.getElementById('result-scale').classList.remove('hidden');
         const pills = document.getElementById('scale-pills');
@@ -714,6 +739,9 @@ function displayResults(data, study, attend, assign, requirementWeightSum) {
         pills.innerHTML = thresholds.map(t =>
             `<span class="scale-pill" style="${data.grade_letter === t.g ? 'background:'+color+';color:white;border-color:'+color : ''}">${t.g} ${t.min}+</span>`
         ).join('');
+    } else {
+        document.getElementById('result-curve-details').classList.add('hidden');
+        document.getElementById('result-scale').classList.add('hidden');
     }
 
     const tips = generateTips(study, attend, assign, data, requirementWeightSum);
@@ -773,6 +801,7 @@ async function warmupServerHealth() {
 }
 
 warmupServerHealth();
+toggleLetterGrades();
 </script>
 
 </body>

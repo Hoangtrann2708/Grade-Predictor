@@ -143,6 +143,10 @@ def _validate_predict(data):
     th_a = th_b = th_c = th_d = None
     custom_scale = []
     opt_class_avg = opt_class_sd = opt_class_median = None
+    score_scale_base = _num_field(
+        data, 'score_scale_base', errors, label='Score scale base', lo=1, hi=1000, default=100
+    )
+    use_letter_grades = bool(data.get('use_letter_grades', True))
 
     if grading_mode == 'curve':
         curve_pct_a = _num_field(data, 'pct_a', errors, label='A %', lo=0, hi=100, default=30)
@@ -163,74 +167,77 @@ def _validate_predict(data):
                 })
 
     elif grading_mode == 'custom_score':
-        th_a = _num_field(
-            data, 'threshold_a', errors, label='Threshold A', lo=0, hi=100, default=90
-        )
-        th_b = _num_field(
-            data, 'threshold_b', errors, label='Threshold B', lo=0, hi=100, default=80
-        )
-        th_c = _num_field(
-            data, 'threshold_c', errors, label='Threshold C', lo=0, hi=100, default=70
-        )
-        th_d = _num_field(
-            data, 'threshold_d', errors, label='Threshold D', lo=0, hi=100, default=60
-        )
-        if all(x is not None for x in (th_a, th_b, th_c, th_d)):
-            if not (th_a >= th_b >= th_c >= th_d):
-                errors.append({
-                    'field': 'thresholds',
-                    'message': 'A threshold must be >= B >= C >= D (e.g. 90 / 80 / 70 / 60).',
-                })
+        if use_letter_grades:
+            th_a = _num_field(
+                data, 'threshold_a', errors, label='Threshold A', lo=0, hi=100, default=90
+            )
+            th_b = _num_field(
+                data, 'threshold_b', errors, label='Threshold B', lo=0, hi=100, default=80
+            )
+            th_c = _num_field(
+                data, 'threshold_c', errors, label='Threshold C', lo=0, hi=100, default=70
+            )
+            th_d = _num_field(
+                data, 'threshold_d', errors, label='Threshold D', lo=0, hi=100, default=60
+            )
+            if all(x is not None for x in (th_a, th_b, th_c, th_d)):
+                if not (th_a >= th_b >= th_c >= th_d):
+                    errors.append({
+                        'field': 'thresholds',
+                        'message': 'A threshold must be >= B >= C >= D (e.g. 90 / 80 / 70 / 60).',
+                    })
 
-        raw_scale = data.get('custom_scale')
-        if raw_scale is not None:
-            if not isinstance(raw_scale, list) or len(raw_scale) == 0:
-                errors.append({
-                    'field': 'custom_scale',
-                    'message': 'custom_scale must be a non-empty array when provided.',
-                })
-            else:
-                seen_labels = set()
-                for i, item in enumerate(raw_scale):
-                    if not isinstance(item, dict):
-                        errors.append({
-                            'field': f'custom_scale[{i}]',
-                            'message': 'Each custom scale item must be an object.',
-                        })
-                        continue
-                    label = str(item.get('label', '')).strip().upper()
-                    if not label:
-                        errors.append({
-                            'field': f'custom_scale[{i}].label',
-                            'message': 'Grade label is required.',
-                        })
-                    elif label in seen_labels:
-                        errors.append({
-                            'field': f'custom_scale[{i}].label',
-                            'message': f'Duplicate label "{label}" is not allowed.',
-                        })
-                    else:
-                        seen_labels.add(label)
-                    minimum = _num_field(
-                        item,
-                        'min',
-                        errors,
-                        label=f'Min score for {label or "grade"}',
-                        lo=0,
-                        hi=100,
-                        required=True,
-                    )
-                    if minimum is not None and label:
-                        custom_scale.append({'label': label, 'min': minimum})
-
-                if len(custom_scale) >= 2:
-                    for prev, curr in zip(custom_scale, custom_scale[1:]):
-                        if prev['min'] < curr['min']:
+            raw_scale = data.get('custom_scale')
+            if raw_scale is not None:
+                if not isinstance(raw_scale, list) or len(raw_scale) == 0:
+                    errors.append({
+                        'field': 'custom_scale',
+                        'message': 'custom_scale must be a non-empty array when provided.',
+                    })
+                else:
+                    seen_labels = set()
+                    for i, item in enumerate(raw_scale):
+                        if not isinstance(item, dict):
                             errors.append({
-                                'field': 'custom_scale',
-                                'message': 'custom_scale must be ordered from highest min score to lowest.',
+                                'field': f'custom_scale[{i}]',
+                                'message': 'Each custom scale item must be an object.',
                             })
-                            break
+                            continue
+                        label = str(item.get('label', '')).strip().upper()
+                        if not label:
+                            errors.append({
+                                'field': f'custom_scale[{i}].label',
+                                'message': 'Grade label is required.',
+                            })
+                        elif label in seen_labels:
+                            errors.append({
+                                'field': f'custom_scale[{i}].label',
+                                'message': f'Duplicate label "{label}" is not allowed.',
+                            })
+                        else:
+                            seen_labels.add(label)
+                        minimum = _num_field(
+                            item,
+                            'min',
+                            errors,
+                            label=f'Min score for {label or "grade"}',
+                            lo=0,
+                            hi=100,
+                            required=True,
+                        )
+                        if minimum is not None and label:
+                            custom_scale.append({'label': label, 'min': minimum})
+
+                    if len(custom_scale) >= 2:
+                        for prev, curr in zip(custom_scale, custom_scale[1:]):
+                            if prev['min'] < curr['min']:
+                                errors.append({
+                                    'field': 'custom_scale',
+                                    'message': 'custom_scale must be ordered from highest min score to lowest.',
+                                })
+                                break
+        else:
+            th_a, th_b, th_c, th_d = 90.0, 80.0, 70.0, 60.0
 
         if data.get('class_avg') not in (None, ''):
             opt_class_avg = _num_field(
@@ -261,6 +268,8 @@ def _validate_predict(data):
         'sleep_hours': sleep_hours,
         'grading_mode': grading_mode,
         'requirements': parsed_requirements,
+        'score_scale_base': score_scale_base,
+        'use_letter_grades': use_letter_grades,
     }
     if grading_mode == 'curve':
         parsed.update({
@@ -352,6 +361,9 @@ def predict():
         prediction = ml_prediction
         prediction_source = 'ml_model'
 
+    score_scale_base = p.get('score_scale_base', 100.0)
+    prediction_display = round((prediction * score_scale_base) / 100.0, 2)
+
     if grading_mode == 'curve':
         # ── Curve / Percentile grading ──
         class_avg = p['class_avg']
@@ -403,7 +415,11 @@ def predict():
 
         return jsonify({
             'ok': True,
-            'prediction': prediction,
+            'prediction': prediction_display,
+            'prediction_percent': prediction,
+            'prediction_display': prediction_display,
+            'score_scale_base': score_scale_base,
+            'use_letter_grades': True,
             'prediction_source': prediction_source,
             'ml_prediction': ml_prediction,
             'requirements_total_weight': round(sum(r['weight'] for r in requirements), 2),
@@ -432,8 +448,13 @@ def predict():
     threshold_c = p['threshold_c']
     threshold_d = p['threshold_d']
     custom_scale = p.get('custom_scale', [])
+    use_letter_grades = bool(p.get('use_letter_grades', True))
 
-    if custom_scale:
+    if not use_letter_grades:
+        grade_letter = '--'
+        message = 'Numeric score mode: thresholds disabled.'
+        needed_for_a = 0
+    elif custom_scale:
         grade_letter = 'F'
         for item in custom_scale:
             if prediction >= item['min']:
@@ -471,7 +492,11 @@ def predict():
 
     response = {
         'ok': True,
-        'prediction': prediction,
+        'prediction': prediction_display,
+        'prediction_percent': prediction,
+        'prediction_display': prediction_display,
+        'score_scale_base': score_scale_base,
+        'use_letter_grades': use_letter_grades,
         'prediction_source': prediction_source,
         'ml_prediction': ml_prediction,
         'requirements_total_weight': round(sum(r['weight'] for r in requirements), 2),
