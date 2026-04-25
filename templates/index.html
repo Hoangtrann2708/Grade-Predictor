@@ -53,7 +53,7 @@
                     <button class="add-btn" onclick="addRequirement()">+ Add Requirement</button>
                 </div>
                 <div id="requirements-list"></div>
-                <p class="section-desc" id="requirements-hint">Add items like Midterm/Final with Earned and Out-of points. Score % auto-calculates, and mark Extra when applicable.</p>
+                <p class="section-desc" id="requirements-hint">Use one score box: type either a percent (85) or fraction (29/30). It auto-converts to score % when you leave the field.</p>
             </div>
 
             <div class="card">
@@ -337,9 +337,7 @@ function addRequirement() {
     div.id = `requirement-${requirementCount}`;
     div.innerHTML = `
         <input type="text" placeholder="e.g. Midterm" class="requirement-name">
-        <input type="number" placeholder="Earned" min="0" step="0.1" class="requirement-earned" oninput="updateRequirementScore(${requirementCount})">
-        <input type="number" placeholder="Out of" min="0" step="0.1" class="requirement-total" oninput="updateRequirementScore(${requirementCount})">
-        <input type="number" placeholder="Score %" min="0" max="100" step="0.1" class="requirement-score" oninput="updateRequirementFromPercent(${requirementCount})">
+        <input type="text" placeholder="Score (e.g. 85 or 29/30)" class="requirement-score" onblur="normalizeRequirementScore(${requirementCount})">
         <input type="number" placeholder="Weight %" min="0" max="100" step="0.1" class="requirement-weight">
         <label class="extra-credit-check">
             <input type="checkbox" class="requirement-extra">
@@ -351,32 +349,32 @@ function addRequirement() {
     document.getElementById('requirements-hint').style.display = 'none';
 }
 
-function updateRequirementScore(id) {
-    const row = document.getElementById(`requirement-${id}`);
-    if (!row) return;
-    const earnedInput = row.querySelector('.requirement-earned');
-    const totalInput = row.querySelector('.requirement-total');
-    const percentInput = row.querySelector('.requirement-score');
-    const earned = parseFloat(earnedInput.value);
-    const total = parseFloat(totalInput.value);
-    if (!isNaN(earned) && !isNaN(total) && total > 0) {
-        const pct = Math.max(0, Math.min(100, (earned / total) * 100));
-        percentInput.value = pct.toFixed(1);
+function parseScoreToPercent(rawValue) {
+    if (rawValue === null || rawValue === undefined) return null;
+    const txt = String(rawValue).trim();
+    if (!txt) return null;
+
+    if (txt.includes('/')) {
+        const parts = txt.split('/');
+        if (parts.length !== 2) return null;
+        const earned = parseFloat(parts[0]);
+        const total = parseFloat(parts[1]);
+        if (isNaN(earned) || isNaN(total) || total <= 0) return null;
+        const pct = (earned / total) * 100;
+        return Math.max(0, Math.min(100, pct));
     }
+
+    const val = parseFloat(txt);
+    if (isNaN(val)) return null;
+    return Math.max(0, Math.min(100, val));
 }
 
-function updateRequirementFromPercent(id) {
+function normalizeRequirementScore(id) {
     const row = document.getElementById(`requirement-${id}`);
     if (!row) return;
-    const earnedInput = row.querySelector('.requirement-earned');
-    const totalInput = row.querySelector('.requirement-total');
     const percentInput = row.querySelector('.requirement-score');
-    const pct = parseFloat(percentInput.value);
-    const total = parseFloat(totalInput.value);
-    if (!isNaN(pct) && !isNaN(total) && total > 0 && (earnedInput.value === '' || document.activeElement === percentInput)) {
-        const earned = Math.max(0, (pct / 100) * total);
-        earnedInput.value = earned.toFixed(1);
-    }
+    const pct = parseScoreToPercent(percentInput.value);
+    if (pct !== null) percentInput.value = pct.toFixed(1);
 }
 
 function removeRequirement(id) {
@@ -445,13 +443,12 @@ async function submitPrediction() {
     const reqRows = document.querySelectorAll('.requirement-row');
     reqRows.forEach(row => {
         const name = row.querySelector('.requirement-name').value.trim() || 'Unnamed';
-        const score = parseFloat(row.querySelector('.requirement-score').value);
-        const earned = parseFloat(row.querySelector('.requirement-earned').value);
-        const total = parseFloat(row.querySelector('.requirement-total').value);
+        const scoreRaw = row.querySelector('.requirement-score').value;
+        const score = parseScoreToPercent(scoreRaw);
         const weight = parseFloat(row.querySelector('.requirement-weight').value);
         const isExtraCredit = row.querySelector('.requirement-extra').checked;
-        if (!isNaN(score) && !isNaN(weight) && weight > 0) {
-            requirements.push({ name, score, weight, is_extra_credit: isExtraCredit, earned, total });
+        if (score !== null && !isNaN(weight) && weight > 0) {
+            requirements.push({ name, score, weight, is_extra_credit: isExtraCredit });
             weightedTotal += score * weight;
             totalWeight += weight;
         }
