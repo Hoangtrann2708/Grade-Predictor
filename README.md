@@ -9,8 +9,8 @@ It is built as a practical student tool, not just a model demo.
 
 ## Demo
 
-- **Live Demo:** `https://grade-predictor-4lce.onrender.com`
-- **Local Demo (for instant presentation):** `http://127.0.0.1:5000`
+- **Live Demo:** [https://grade-predictor-4lce.onrender.com](https://grade-predictor-4lce.onrender.com)
+- **Local Demo (for instant presentation):** [http://127.0.0.1:5000](http://127.0.0.1:5000)
 
 Recruiter note: This project is hosted on Render free tier.  
 The first request after inactivity may take ~30-60 seconds (cold start), then performance is normal.
