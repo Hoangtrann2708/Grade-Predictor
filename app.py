@@ -66,6 +66,7 @@ def _validate_predict(data):
         })
 
     raw_reqs = data.get('requirements')
+    parsed_requirements = []
     if raw_reqs is None:
         reqs = []
     elif not isinstance(raw_reqs, list):
@@ -108,6 +109,11 @@ def _validate_predict(data):
                     'field': f'requirements[{i}].weight',
                     'message': 'Each weight must be between 0 and 100 (exclusive of 0).',
                 })
+            parsed_requirements.append({
+                'name': str(item.get('name', f'Requirement {i + 1}')),
+                'score': scf,
+                'weight': wtf,
+            })
 
     curve_pct_a = curve_pct_b = curve_pct_c = None
     curve_class_avg = curve_class_sd = curve_class_median = None
@@ -180,6 +186,7 @@ def _validate_predict(data):
         'past_gpa': past_gpa,
         'sleep_hours': sleep_hours,
         'grading_mode': grading_mode,
+        'requirements': parsed_requirements,
     }
     if grading_mode == 'curve':
         parsed.update({
@@ -244,8 +251,24 @@ def predict():
     features = np.array([[study_hours, attendance, assignment_avg,
                           past_gpa, sleep_hours]])
     features_scaled = scaler.transform(features)
-    prediction = model.predict(features_scaled)[0]
-    prediction = round(float(np.clip(prediction, 0, 100)), 1)
+    ml_prediction = model.predict(features_scaled)[0]
+    ml_prediction = round(float(np.clip(ml_prediction, 0, 100)), 1)
+
+    # If user provided course components, use their weighted score for grading.
+    # This matches real syllabus math (score * weight), which users expect.
+    requirements = p.get('requirements', [])
+    if requirements:
+        total_weight = sum(r['weight'] for r in requirements if r['weight'] > 0)
+        if total_weight > 0:
+            weighted_sum = sum(r['score'] * r['weight'] for r in requirements)
+            prediction = round(float(np.clip(weighted_sum / total_weight, 0, 100)), 1)
+            prediction_source = 'weighted_requirements'
+        else:
+            prediction = ml_prediction
+            prediction_source = 'ml_model'
+    else:
+        prediction = ml_prediction
+        prediction_source = 'ml_model'
 
     if grading_mode == 'curve':
         # ── Curve / Percentile grading ──
@@ -299,6 +322,8 @@ def predict():
         return jsonify({
             'ok': True,
             'prediction': prediction,
+            'prediction_source': prediction_source,
+            'ml_prediction': ml_prediction,
             'grade_letter': grade_letter,
             'message': message,
             'grading_mode': 'curve',
@@ -345,6 +370,8 @@ def predict():
     response = {
         'ok': True,
         'prediction': prediction,
+        'prediction_source': prediction_source,
+        'ml_prediction': ml_prediction,
         'grade_letter': grade_letter,
         'message': message,
         'grading_mode': 'custom_score',
