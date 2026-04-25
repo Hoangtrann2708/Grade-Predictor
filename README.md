@@ -9,7 +9,7 @@ It is built as a practical student tool, not just a model demo.
 
 ## Demo
 
-- **Live Demo:** [https://grade-predictor-4lce.onrender.com](https://grade-predictor-4lce.onrender.com)
+- **Live Demo:** [https://grade-predictor-1-zjns.onrender.com](https://grade-predictor-1-zjns.onrender.com)
 - **Local Demo (for instant presentation):** [http://127.0.0.1:5000](http://127.0.0.1:5000)
 
 Recruiter note: This project is hosted on Render free tier.  
