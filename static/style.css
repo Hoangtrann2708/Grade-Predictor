@@ -120,7 +120,7 @@ body {
     color: rgba(255,255,255,.55);
     margin-bottom: 6px;
 }
-.input-group input, .threshold-input, .curve-input, .factor-name, .factor-value, .requirement-name, .requirement-score, .requirement-weight {
+.input-group input, .threshold-input, .curve-input, .factor-name, .factor-value, .requirement-name, .requirement-earned, .requirement-total, .requirement-score, .requirement-weight {
     width: 100%;
     padding: 12px 14px;
     border-radius: 10px;
@@ -133,7 +133,7 @@ body {
     outline: none;
     transition: border-color .2s;
 }
-.input-group input:focus, .threshold-input:focus, .curve-input:focus, .factor-name:focus, .factor-value:focus, .requirement-name:focus, .requirement-score:focus, .requirement-weight:focus {
+.input-group input:focus, .threshold-input:focus, .curve-input:focus, .factor-name:focus, .factor-value:focus, .requirement-name:focus, .requirement-earned:focus, .requirement-total:focus, .requirement-score:focus, .requirement-weight:focus {
     border-color: #6366f1;
 }
 input::placeholder { color: rgba(255,255,255,.2); }
@@ -186,6 +186,32 @@ input:disabled { opacity: .4; cursor: not-allowed; }
 .grade-b { color: #3b82f6; }
 .grade-c { color: #f59e0b; }
 .grade-d { color: #ef4444; }
+.grade-option-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+.grade-variant-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(255,255,255,.03);
+    border-radius: 10px;
+    padding: 10px 12px;
+    border: 1px solid rgba(255,255,255,.05);
+    margin-bottom: 8px;
+}
+.variant-input {
+    width: 120px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,.1);
+    background: rgba(255,255,255,.05);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+}
 
 /* ── Curve ── */
 .curve-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 12px; }
@@ -233,6 +259,7 @@ input:disabled { opacity: .4; cursor: not-allowed; }
 }
 .requirement-row {
     display: flex;
+    flex-wrap: wrap;
     gap: 10px;
     align-items: center;
     margin-bottom: 10px;
@@ -244,8 +271,15 @@ input:disabled { opacity: .4; cursor: not-allowed; }
 }
 .factor-name { flex: 2; }
 .factor-value { flex: 1; }
-.requirement-name { flex: 2; }
-.requirement-score, .requirement-weight { flex: 1; }
+.requirement-name { flex: 1.8; }
+.requirement-earned, .requirement-total, .requirement-score, .requirement-weight { flex: 0.8; min-width: 90px; }
+.requirement-preview {
+    flex: 1 1 100%;
+    margin-top: -4px;
+    font-size: 12px;
+    color: rgba(20,184,166,.9);
+}
+.requirement-preview.preview-error { color: #fca5a5; }
 .factor-name,
 .factor-value {
     color: #fff !important;
@@ -254,6 +288,8 @@ input:disabled { opacity: .4; cursor: not-allowed; }
     min-width: 0;
 }
 .requirement-name,
+.requirement-earned,
+.requirement-total,
 .requirement-score,
 .requirement-weight {
     color: #fff !important;
@@ -262,9 +298,25 @@ input:disabled { opacity: .4; cursor: not-allowed; }
     min-width: 0;
 }
 .requirement-name::placeholder,
+.requirement-earned::placeholder,
+.requirement-total::placeholder,
 .requirement-score::placeholder,
 .requirement-weight::placeholder {
     color: rgba(255,255,255,.35);
+}
+.extra-credit-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 68px;
+    font-size: 12px;
+    color: rgba(255,255,255,.65);
+    font-weight: 600;
+}
+.extra-credit-check input {
+    width: 14px;
+    height: 14px;
+    accent-color: #14b8a6;
 }
 .factor-name::placeholder,
 .factor-value::placeholder {
@@ -543,4 +595,17 @@ input:disabled { opacity: .4; cursor: not-allowed; }
     .comparison-grid { grid-template-columns: 1fr 1fr; }
     .stats-grid { grid-template-columns: 1fr; }
     .mode-toggle { flex-direction: column; }
+    .requirement-row {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .requirement-name { flex: 1 1 100%; }
+    .requirement-earned,
+    .requirement-total,
+    .requirement-score,
+    .requirement-weight {
+        flex: 1 1 calc(50% - 8px);
+        min-width: 0;
+    }
+    .extra-credit-check { flex: 0 0 auto; }
 }

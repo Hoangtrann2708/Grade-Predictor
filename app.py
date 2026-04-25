@@ -66,6 +66,7 @@ def _validate_predict(data):
         })
 
     raw_reqs = data.get('requirements')
+    parsed_requirements = []
     if raw_reqs is None:
         reqs = []
     elif not isinstance(raw_reqs, list):
@@ -83,6 +84,7 @@ def _validate_predict(data):
                 continue
             sc = item.get('score')
             wt = item.get('weight')
+            is_extra_credit = bool(item.get('is_extra_credit', False))
             try:
                 scf = float(sc)
                 wtf = float(wt)
@@ -108,11 +110,43 @@ def _validate_predict(data):
                     'field': f'requirements[{i}].weight',
                     'message': 'Each weight must be between 0 and 100 (exclusive of 0).',
                 })
+            earned_val = item.get('earned')
+            total_val = item.get('total')
+            if earned_val not in (None, '') or total_val not in (None, ''):
+                try:
+                    earned_f = float(earned_val)
+                    total_f = float(total_val)
+                    if total_f <= 0:
+                        errors.append({
+                            'field': f'requirements[{i}].total',
+                            'message': 'Total points must be greater than 0.',
+                        })
+                    elif earned_f < 0 or earned_f > total_f:
+                        errors.append({
+                            'field': f'requirements[{i}].earned',
+                            'message': 'Earned points must be between 0 and total points.',
+                        })
+                except (TypeError, ValueError):
+                    errors.append({
+                        'field': f'requirements[{i}]',
+                        'message': 'Earned and total points must be numeric when provided.',
+                    })
+            parsed_requirements.append({
+                'name': str(item.get('name', f'Requirement {i + 1}')),
+                'score': scf,
+                'weight': wtf,
+                'is_extra_credit': is_extra_credit,
+            })
 
     curve_pct_a = curve_pct_b = curve_pct_c = None
     curve_class_avg = curve_class_sd = curve_class_median = None
     th_a = th_b = th_c = th_d = None
+    custom_scale = []
     opt_class_avg = opt_class_sd = opt_class_median = None
+    score_scale_base = _num_field(
+        data, 'score_scale_base', errors, label='Score scale base', lo=1, hi=1000, default=100
+    )
+    use_letter_grades = bool(data.get('use_letter_grades', True))
 
     if grading_mode == 'curve':
         curve_pct_a = _num_field(data, 'pct_a', errors, label='A %', lo=0, hi=100, default=30)
@@ -126,31 +160,84 @@ def _validate_predict(data):
             data, 'class_median', errors, label='Class median', lo=0, hi=100, default=75
         )
         if curve_pct_a is not None and curve_pct_b is not None and curve_pct_c is not None:
-            if abs(curve_pct_a + curve_pct_b + curve_pct_c ) > 0.01:
+            if curve_pct_a + curve_pct_b + curve_pct_c > 100.01:
                 errors.append({
                     'field': 'pct_total',
-                    'message': 'A% + B% + C% must equal 100%.',
+                    'message': 'A% + B% + C% cannot exceed 100%. D/F is the remaining percent.',
                 })
 
     elif grading_mode == 'custom_score':
-        th_a = _num_field(
-            data, 'threshold_a', errors, label='Threshold A', lo=0, hi=100, default=90
-        )
-        th_b = _num_field(
-            data, 'threshold_b', errors, label='Threshold B', lo=0, hi=100, default=80
-        )
-        th_c = _num_field(
-            data, 'threshold_c', errors, label='Threshold C', lo=0, hi=100, default=70
-        )
-        th_d = _num_field(
-            data, 'threshold_d', errors, label='Threshold D', lo=0, hi=100, default=60
-        )
-        if all(x is not None for x in (th_a, th_b, th_c, th_d)):
-            if not (th_a >= th_b >= th_c >= th_d):
-                errors.append({
-                    'field': 'thresholds',
-                    'message': 'A threshold must be >= B >= C >= D (e.g. 90 / 80 / 70 / 60).',
-                })
+        if use_letter_grades:
+            th_a = _num_field(
+                data, 'threshold_a', errors, label='Threshold A', lo=0, hi=100, default=90
+            )
+            th_b = _num_field(
+                data, 'threshold_b', errors, label='Threshold B', lo=0, hi=100, default=80
+            )
+            th_c = _num_field(
+                data, 'threshold_c', errors, label='Threshold C', lo=0, hi=100, default=70
+            )
+            th_d = _num_field(
+                data, 'threshold_d', errors, label='Threshold D', lo=0, hi=100, default=60
+            )
+            if all(x is not None for x in (th_a, th_b, th_c, th_d)):
+                if not (th_a >= th_b >= th_c >= th_d):
+                    errors.append({
+                        'field': 'thresholds',
+                        'message': 'A threshold must be >= B >= C >= D (e.g. 90 / 80 / 70 / 60).',
+                    })
+
+            raw_scale = data.get('custom_scale')
+            if raw_scale is not None:
+                if not isinstance(raw_scale, list) or len(raw_scale) == 0:
+                    errors.append({
+                        'field': 'custom_scale',
+                        'message': 'custom_scale must be a non-empty array when provided.',
+                    })
+                else:
+                    seen_labels = set()
+                    for i, item in enumerate(raw_scale):
+                        if not isinstance(item, dict):
+                            errors.append({
+                                'field': f'custom_scale[{i}]',
+                                'message': 'Each custom scale item must be an object.',
+                            })
+                            continue
+                        label = str(item.get('label', '')).strip().upper()
+                        if not label:
+                            errors.append({
+                                'field': f'custom_scale[{i}].label',
+                                'message': 'Grade label is required.',
+                            })
+                        elif label in seen_labels:
+                            errors.append({
+                                'field': f'custom_scale[{i}].label',
+                                'message': f'Duplicate label "{label}" is not allowed.',
+                            })
+                        else:
+                            seen_labels.add(label)
+                        minimum = _num_field(
+                            item,
+                            'min',
+                            errors,
+                            label=f'Min score for {label or "grade"}',
+                            lo=0,
+                            hi=100,
+                            required=True,
+                        )
+                        if minimum is not None and label:
+                            custom_scale.append({'label': label, 'min': minimum})
+
+                    if len(custom_scale) >= 2:
+                        for prev, curr in zip(custom_scale, custom_scale[1:]):
+                            if prev['min'] < curr['min']:
+                                errors.append({
+                                    'field': 'custom_scale',
+                                    'message': 'custom_scale must be ordered from highest min score to lowest.',
+                                })
+                                break
+        else:
+            th_a, th_b, th_c, th_d = 90.0, 80.0, 70.0, 60.0
 
         if data.get('class_avg') not in (None, ''):
             opt_class_avg = _num_field(
@@ -180,6 +267,9 @@ def _validate_predict(data):
         'past_gpa': past_gpa,
         'sleep_hours': sleep_hours,
         'grading_mode': grading_mode,
+        'requirements': parsed_requirements,
+        'score_scale_base': score_scale_base,
+        'use_letter_grades': use_letter_grades,
     }
     if grading_mode == 'curve':
         parsed.update({
@@ -196,6 +286,7 @@ def _validate_predict(data):
             'threshold_b': th_b,
             'threshold_c': th_c,
             'threshold_d': th_d,
+            'custom_scale': custom_scale,
         })
         if opt_class_avg is not None:
             parsed['class_avg'] = opt_class_avg
@@ -244,8 +335,34 @@ def predict():
     features = np.array([[study_hours, attendance, assignment_avg,
                           past_gpa, sleep_hours]])
     features_scaled = scaler.transform(features)
-    prediction = model.predict(features_scaled)[0]
-    prediction = round(float(np.clip(prediction, 0, 100)), 1)
+    ml_prediction = model.predict(features_scaled)[0]
+    ml_prediction = round(float(np.clip(ml_prediction, 0, 100)), 1)
+
+    # If user provided course components, use their weighted score for grading.
+    # This matches real syllabus math (score * weight), which users expect.
+    requirements = p.get('requirements', [])
+    if requirements:
+        # Syllabus-style point calculation:
+        # contribution = score * (weight / 100), so extra-credit adds on top.
+        base_points = sum(
+            (r['score'] * r['weight']) / 100.0
+            for r in requirements
+            if not r.get('is_extra_credit')
+        )
+        extra_credit_points = sum(
+            (r['score'] * r['weight']) / 100.0
+            for r in requirements
+            if r.get('is_extra_credit')
+        )
+        weighted_points = base_points + extra_credit_points
+        prediction = round(float(np.clip(weighted_points, 0, 100)), 1)
+        prediction_source = 'weighted_requirements'
+    else:
+        prediction = ml_prediction
+        prediction_source = 'ml_model'
+
+    score_scale_base = p.get('score_scale_base', 100.0)
+    prediction_display = round((prediction * score_scale_base) / 100.0, 2)
 
     if grading_mode == 'curve':
         # ── Curve / Percentile grading ──
@@ -298,7 +415,14 @@ def predict():
 
         return jsonify({
             'ok': True,
-            'prediction': prediction,
+            'prediction': prediction_display,
+            'prediction_percent': prediction,
+            'prediction_display': prediction_display,
+            'score_scale_base': score_scale_base,
+            'use_letter_grades': True,
+            'prediction_source': prediction_source,
+            'ml_prediction': ml_prediction,
+            'requirements_total_weight': round(sum(r['weight'] for r in requirements), 2),
             'grade_letter': grade_letter,
             'message': message,
             'grading_mode': 'curve',
@@ -323,28 +447,59 @@ def predict():
     threshold_b = p['threshold_b']
     threshold_c = p['threshold_c']
     threshold_d = p['threshold_d']
+    custom_scale = p.get('custom_scale', [])
+    use_letter_grades = bool(p.get('use_letter_grades', True))
 
-    if prediction >= threshold_a:
-        grade_letter = 'A'
-        message = 'Excellent! Keep it up!'
-    elif prediction >= threshold_b:
-        grade_letter = 'B'
-        message = 'Great job! Almost there!'
-    elif prediction >= threshold_c:
-        grade_letter = 'C'
-        message = 'Not bad! You can do better!'
-    elif prediction >= threshold_d:
-        grade_letter = 'D'
-        message = 'Need to work harder!'
-    else:
+    if not use_letter_grades:
+        grade_letter = '--'
+        message = 'Numeric score mode: thresholds disabled.'
+        needed_for_a = 0
+    elif custom_scale:
         grade_letter = 'F'
-        message = 'Please study more!'
-
-    needed_for_a = max(0, round(threshold_a - prediction, 1))
+        for item in custom_scale:
+            if prediction >= item['min']:
+                grade_letter = item['label']
+                break
+        if grade_letter.startswith('A'):
+            message = 'Excellent! Keep it up!'
+        elif grade_letter.startswith('B'):
+            message = 'Great job! Almost there!'
+        elif grade_letter.startswith('C'):
+            message = 'Not bad! You can do better!'
+        elif grade_letter.startswith('D'):
+            message = 'Need to work harder!'
+        else:
+            message = 'Please study more!'
+        a_target = next((g['min'] for g in custom_scale if g['label'] == 'A'), threshold_a)
+        needed_for_a = max(0, round(a_target - prediction, 1))
+    else:
+        if prediction >= threshold_a:
+            grade_letter = 'A'
+            message = 'Excellent! Keep it up!'
+        elif prediction >= threshold_b:
+            grade_letter = 'B'
+            message = 'Great job! Almost there!'
+        elif prediction >= threshold_c:
+            grade_letter = 'C'
+            message = 'Not bad! You can do better!'
+        elif prediction >= threshold_d:
+            grade_letter = 'D'
+            message = 'Need to work harder!'
+        else:
+            grade_letter = 'F'
+            message = 'Please study more!'
+        needed_for_a = max(0, round(threshold_a - prediction, 1))
 
     response = {
         'ok': True,
-        'prediction': prediction,
+        'prediction': prediction_display,
+        'prediction_percent': prediction,
+        'prediction_display': prediction_display,
+        'score_scale_base': score_scale_base,
+        'use_letter_grades': use_letter_grades,
+        'prediction_source': prediction_source,
+        'ml_prediction': ml_prediction,
+        'requirements_total_weight': round(sum(r['weight'] for r in requirements), 2),
         'grade_letter': grade_letter,
         'message': message,
         'grading_mode': 'custom_score',
@@ -353,6 +508,7 @@ def predict():
         'threshold_b': threshold_b,
         'threshold_c': threshold_c,
         'threshold_d': threshold_d,
+        'custom_scale': custom_scale,
     }
 
     if 'class_avg' in p:
