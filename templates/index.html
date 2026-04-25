@@ -57,7 +57,7 @@
                     <input type="number" id="score-default-total" min="1" step="0.1" value="100" placeholder="e.g. 100 or 10">
                 </div>
                 <div id="requirements-list"></div>
-                <p class="section-desc" id="requirements-hint">Use one score box: `29/30`, `85%`, or plain `10` (interpreted as 10 out of Default Out Of).</p>
+                <p class="section-desc" id="requirements-hint">Score follows your selected base. Example: if Default Out Of = 10, typing 8.6 stays 8.6. You can also type 29/30 or 85%.</p>
             </div>
 
             <div class="card">
@@ -382,6 +382,32 @@ function parseScoreToPercent(rawValue, defaultTotal = 100) {
     return Math.max(0, Math.min(100, pct));
 }
 
+function parseScoreToBase(rawValue, defaultTotal = 100) {
+    if (rawValue === null || rawValue === undefined) return null;
+    const txt = String(rawValue).trim();
+    if (!txt) return null;
+
+    if (txt.endsWith('%')) {
+        const pctVal = parseFloat(txt.slice(0, -1));
+        if (isNaN(pctVal)) return null;
+        return Math.max(0, (Math.min(100, pctVal) / 100) * defaultTotal);
+    }
+
+    if (txt.includes('/')) {
+        const parts = txt.split('/');
+        if (parts.length !== 2) return null;
+        const earned = parseFloat(parts[0]);
+        const total = parseFloat(parts[1]);
+        if (isNaN(earned) || isNaN(total) || total <= 0) return null;
+        const scaled = (earned / total) * defaultTotal;
+        return Math.max(0, scaled);
+    }
+
+    const val = parseFloat(txt);
+    if (isNaN(val)) return null;
+    return Math.max(0, val);
+}
+
 function getDefaultScoreTotal() {
     const v = parseFloat(document.getElementById('score-default-total').value);
     return (!isNaN(v) && v > 0) ? v : 100;
@@ -392,12 +418,14 @@ function updateRequirementPreview(id) {
     const preview = document.getElementById(`requirement-preview-${id}`);
     if (!row || !preview) return;
     const raw = row.querySelector('.requirement-score').value;
+    const base = parseScoreToBase(raw, getDefaultScoreTotal());
     const pct = parseScoreToPercent(raw, getDefaultScoreTotal());
-    if (pct === null) {
+    if (base === null || pct === null) {
         preview.textContent = 'Invalid format. Use 29/30, 85%, or a plain number.';
         preview.classList.add('preview-error');
     } else {
-        preview.textContent = `Calculated: ${pct.toFixed(1)}%`;
+        const denom = getDefaultScoreTotal();
+        preview.textContent = `Calculated: ${base.toFixed(1)} / ${denom} (${pct.toFixed(1)}%)`;
         preview.classList.remove('preview-error');
     }
 }
@@ -405,9 +433,10 @@ function updateRequirementPreview(id) {
 function normalizeRequirementScore(id) {
     const row = document.getElementById(`requirement-${id}`);
     if (!row) return;
-    const percentInput = row.querySelector('.requirement-score');
-    const pct = parseScoreToPercent(percentInput.value, getDefaultScoreTotal());
-    if (pct !== null) percentInput.value = pct.toFixed(1);
+    const scoreInput = row.querySelector('.requirement-score');
+    const baseScore = parseScoreToBase(scoreInput.value, getDefaultScoreTotal());
+    if (baseScore !== null) scoreInput.value = baseScore.toFixed(1);
+    updateRequirementPreview(id);
 }
 
 function removeRequirement(id) {
