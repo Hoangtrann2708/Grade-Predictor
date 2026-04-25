@@ -1,6 +1,6 @@
 # Report - Live Testing and Fixes
 
-Use this file as your Day 12 evidence after deployment.
+evidence after deployment.
 
 ## App Information
 
