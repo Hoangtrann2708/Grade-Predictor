@@ -262,6 +262,8 @@ let currentMode = 'custom_score';
 let factorCount = 0;
 let requirementCount = 0;
 const gradeVariants = new Set();
+// Experimental: compute predictions in browser to avoid backend wait.
+const INSTANT_NO_SERVER_MODE = true;
 
 function setRequestStatus(message, type = 'info') {
     const el = document.getElementById('request-status');
@@ -634,7 +636,15 @@ async function submitPrediction() {
 
     try {
         setPredictLoading(true);
-        setRequestStatus('Submitting your prediction request...', 'info');
+        setRequestStatus(INSTANT_NO_SERVER_MODE ? 'Calculating locally (instant mode)...' : 'Submitting your prediction request...', 'info');
+
+        if (INSTANT_NO_SERVER_MODE) {
+            const data = computePredictionLocally(payload);
+            clearFormErrors();
+            clearRequestStatus();
+            displayResults(data, study, attend, assign, totalWeight);
+            return;
+        }
 
         const ctrl = new AbortController();
         const timer = setTimeout(() => ctrl.abort(), 45000);
@@ -679,6 +689,161 @@ async function submitPrediction() {
     } finally {
         setPredictLoading(false);
     }
+}
+
+function computePredictionLocally(payload) {
+    const requirements = Array.isArray(payload.requirements) ? payload.requirements : [];
+    let predictionPercent;
+    if (requirements.length > 0) {
+        const basePoints = requirements
+            .filter(r => !r.is_extra_credit)
+            .reduce((s, r) => s + ((r.score * r.weight) / 100), 0);
+        const extraPoints = requirements
+            .filter(r => r.is_extra_credit)
+            .reduce((s, r) => s + ((r.score * r.weight) / 100), 0);
+        predictionPercent = Math.max(0, Math.min(100, basePoints + extraPoints));
+    } else {
+        predictionPercent = Math.max(0, Math.min(100, payload.assignment_avg || 0));
+    }
+
+    const scoreScaleBase = Number(payload.score_scale_base || 100);
+    const predictionDisplay = Number(((predictionPercent * scoreScaleBase) / 100).toFixed(2));
+    const prediction = predictionDisplay;
+
+    if (payload.grading_mode === 'curve') {
+        const classAvg = Number(payload.class_avg || 75);
+        const classSd = Number(payload.class_sd || 10);
+        const classMedian = Number(payload.class_median || 75);
+        const pctA = Number(payload.pct_a || 30);
+        const pctB = Number(payload.pct_b || 40);
+        const pctC = Number(payload.pct_c || 20);
+        const zScore = classSd > 0 ? (predictionPercent - classAvg) / classSd : 0;
+        const percentile = Number((normalCdf(zScore) * 100).toFixed(1));
+        const cutoffA = 100 - pctA;
+        const cutoffB = 100 - pctA - pctB;
+        const cutoffC = 100 - pctA - pctB - pctC;
+        let gradeLetter = 'F';
+        let message = 'Failing. Please seek help immediately!';
+        if (percentile >= cutoffA) {
+            gradeLetter = 'A';
+            message = 'Excellent! You are in the top tier of your class!';
+        } else if (percentile >= cutoffB) {
+            gradeLetter = 'B';
+            message = 'Great job! Above the class average!';
+        } else if (percentile >= cutoffC) {
+            gradeLetter = 'C';
+            message = 'Average performance. Push harder!';
+        } else if (percentile >= Math.max(cutoffC - 10, 0)) {
+            gradeLetter = 'D';
+            message = 'Below average. Need improvement!';
+        }
+
+        return {
+            ok: true,
+            prediction,
+            prediction_percent: Number(predictionPercent.toFixed(1)),
+            prediction_display: predictionDisplay,
+            score_scale_base: scoreScaleBase,
+            prediction_source: 'instant_local',
+            ml_prediction: Number(predictionPercent.toFixed(1)),
+            grade_letter: gradeLetter,
+            message,
+            grading_mode: 'curve',
+            percentile,
+            z_score: Number(zScore.toFixed(2)),
+            needed_for_a: 0,
+            diff_from_avg: Number((predictionPercent - classAvg).toFixed(1)),
+            diff_from_median: Number((predictionPercent - classMedian).toFixed(1)),
+            class_avg: classAvg,
+            class_sd: classSd,
+            class_median: classMedian,
+            score_for_a: classAvg,
+            score_for_b: classAvg,
+            score_for_c: classAvg,
+            pct_a: pctA,
+            pct_b: pctB,
+            pct_c: pctC,
+            use_letter_grades: true,
+        };
+    }
+
+    const useLetters = payload.use_letter_grades !== false;
+    if (!useLetters) {
+        return {
+            ok: true,
+            prediction,
+            prediction_percent: Number(predictionPercent.toFixed(1)),
+            prediction_display: predictionDisplay,
+            score_scale_base: scoreScaleBase,
+            prediction_source: 'instant_local',
+            ml_prediction: Number(predictionPercent.toFixed(1)),
+            grade_letter: '--',
+            message: 'Numeric score mode: thresholds disabled.',
+            grading_mode: 'custom_score',
+            needed_for_a: 0,
+            threshold_a: payload.threshold_a || 90,
+            threshold_b: payload.threshold_b || 80,
+            threshold_c: payload.threshold_c || 70,
+            threshold_d: payload.threshold_d || 60,
+            custom_scale: [],
+            use_letter_grades: false,
+        };
+    }
+
+    const customScale = Array.isArray(payload.custom_scale) && payload.custom_scale.length
+        ? payload.custom_scale
+        : [
+            { label: 'A', min: payload.threshold_a || 90 },
+            { label: 'B', min: payload.threshold_b || 80 },
+            { label: 'C', min: payload.threshold_c || 70 },
+            { label: 'D', min: payload.threshold_d || 60 },
+            { label: 'F', min: 0 },
+        ];
+
+    let gradeLetter = 'F';
+    for (const item of customScale) {
+        if (predictionPercent >= Number(item.min)) {
+            gradeLetter = item.label;
+            break;
+        }
+    }
+    let message = 'Please study more!';
+    if (gradeLetter.startsWith('A')) message = 'Excellent! Keep it up!';
+    else if (gradeLetter.startsWith('B')) message = 'Great job! Almost there!';
+    else if (gradeLetter.startsWith('C')) message = 'Not bad! You can do better!';
+    else if (gradeLetter.startsWith('D')) message = 'Need to work harder!';
+
+    const aTarget = customScale.find(g => g.label === 'A');
+    const neededForA = aTarget ? Math.max(0, Number((aTarget.min - predictionPercent).toFixed(1))) : 0;
+
+    return {
+        ok: true,
+        prediction,
+        prediction_percent: Number(predictionPercent.toFixed(1)),
+        prediction_display: predictionDisplay,
+        score_scale_base: scoreScaleBase,
+        prediction_source: 'instant_local',
+        ml_prediction: Number(predictionPercent.toFixed(1)),
+        grade_letter: gradeLetter,
+        message,
+        grading_mode: 'custom_score',
+        needed_for_a: neededForA,
+        threshold_a: payload.threshold_a || 90,
+        threshold_b: payload.threshold_b || 80,
+        threshold_c: payload.threshold_c || 70,
+        threshold_d: payload.threshold_d || 60,
+        custom_scale: customScale,
+        use_letter_grades: true,
+    };
+}
+
+function normalCdf(x) {
+    // Abramowitz and Stegun approximation
+    const t = 1 / (1 + 0.2316419 * Math.abs(x));
+    const d = 0.3989423 * Math.exp(-x * x / 2);
+    let prob = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
+    prob = 1 - prob;
+    return x >= 0 ? prob : 1 - prob;
 }
 
 function displayResults(data, study, attend, assign, requirementWeightSum) {
