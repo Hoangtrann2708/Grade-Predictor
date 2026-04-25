@@ -1,6 +1,7 @@
 # Grade Predictor
 
 Grade Predictor is a Flask + ML web app that helps students estimate their final performance using:
+
 - weighted course components (including extra credit),
 - custom score thresholds (A/B/C/D with optional A-, B+, etc.),
 - and curve/percentile grading mode.
@@ -18,6 +19,7 @@ The first request after inactivity may take ~30-60 seconds (cold start), then pe
 ## Why This Project
 
 Different classes use different grading systems:
+
 - some use `0-100`,
 - some use `0-10`,
 - some use point-based scores like `29/30`.
@@ -58,13 +60,13 @@ This app normalizes these inputs, applies the selected grading logic, and provid
 pip install -r requirements.txt
 ```
 
-2. Train and save model artifacts:
+1. Train and save model artifacts:
 
 ```bash
 python model/train_model.py
 ```
 
-3. Start app:
+1. Start app:
 
 ```bash
 python app.py
@@ -84,16 +86,16 @@ Open `http://127.0.0.1:5000`
 ### Render
 
 - **Build command**
-  `pip install -r requirements.txt && python model/train_model.py`
+`pip install -r requirements.txt && python model/train_model.py`
 - **Start command**
-  `gunicorn --bind 0.0.0.0:$PORT app:app`
+`gunicorn --bind 0.0.0.0:$PORT app:app`
 
 ### Railway
 
 - **Build command**
-  `pip install -r requirements.txt && python model/train_model.py`
+`pip install -r requirements.txt && python model/train_model.py`
 - **Start command**
-  `gunicorn --bind 0.0.0.0:$PORT app:app`
+`gunicorn --bind 0.0.0.0:$PORT app:app`
 
 ## Reliability Note (Free Tier)
 
@@ -109,3 +111,4 @@ This is platform behavior, not an application bug.
 - `requirements.txt` - dependencies
 - `render.yaml`, `railway.toml`, `Procfile` - deploy configuration
 - `REPORT.md` - live test checklist/report
+
