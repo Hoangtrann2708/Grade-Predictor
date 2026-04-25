@@ -58,7 +58,7 @@ evidence after deployment.
 - `<fix 1>`
 - `<fix 2>`
 
-## What I Learned (Day 12)
+## What I Learned
 
 - Deployment success is not enough; production testing is required.
 - Free tier can have cold start latency after inactivity.
@@ -66,4 +66,4 @@ evidence after deployment.
 
 ## Interview-Ready Summary
 
-On Day 12, I validated the deployed app in a live environment, tested both valid and invalid user flows on desktop/mobile, reviewed deployment logs, and confirmed reliability after fixing issues.
+I validated the deployed app in a live environment, tested both valid and invalid user flows on desktop/mobile, reviewed deployment logs, and confirmed reliability after fixing issues.
