@@ -84,6 +84,7 @@ def _validate_predict(data):
                 continue
             sc = item.get('score')
             wt = item.get('weight')
+            is_extra_credit = bool(item.get('is_extra_credit', False))
             try:
                 scf = float(sc)
                 wtf = float(wt)
@@ -109,10 +110,32 @@ def _validate_predict(data):
                     'field': f'requirements[{i}].weight',
                     'message': 'Each weight must be between 0 and 100 (exclusive of 0).',
                 })
+            earned_val = item.get('earned')
+            total_val = item.get('total')
+            if earned_val not in (None, '') or total_val not in (None, ''):
+                try:
+                    earned_f = float(earned_val)
+                    total_f = float(total_val)
+                    if total_f <= 0:
+                        errors.append({
+                            'field': f'requirements[{i}].total',
+                            'message': 'Total points must be greater than 0.',
+                        })
+                    elif earned_f < 0 or earned_f > total_f:
+                        errors.append({
+                            'field': f'requirements[{i}].earned',
+                            'message': 'Earned points must be between 0 and total points.',
+                        })
+                except (TypeError, ValueError):
+                    errors.append({
+                        'field': f'requirements[{i}]',
+                        'message': 'Earned and total points must be numeric when provided.',
+                    })
             parsed_requirements.append({
                 'name': str(item.get('name', f'Requirement {i + 1}')),
                 'score': scf,
                 'weight': wtf,
+                'is_extra_credit': is_extra_credit,
             })
 
     curve_pct_a = curve_pct_b = curve_pct_c = None
@@ -310,17 +333,21 @@ def predict():
     # This matches real syllabus math (score * weight), which users expect.
     requirements = p.get('requirements', [])
     if requirements:
-        total_weight = sum(r['weight'] for r in requirements if r['weight'] > 0)
-        if total_weight > 0:
-            # Syllabus-style point calculation:
-            # contribution = score * (weight / 100), so extra-credit weight (>100 total)
-            # adds points on top instead of being normalized away.
-            weighted_points = sum((r['score'] * r['weight']) / 100.0 for r in requirements)
-            prediction = round(float(np.clip(weighted_points, 0, 100)), 1)
-            prediction_source = 'weighted_requirements'
-        else:
-            prediction = ml_prediction
-            prediction_source = 'ml_model'
+        # Syllabus-style point calculation:
+        # contribution = score * (weight / 100), so extra-credit adds on top.
+        base_points = sum(
+            (r['score'] * r['weight']) / 100.0
+            for r in requirements
+            if not r.get('is_extra_credit')
+        )
+        extra_credit_points = sum(
+            (r['score'] * r['weight']) / 100.0
+            for r in requirements
+            if r.get('is_extra_credit')
+        )
+        weighted_points = base_points + extra_credit_points
+        prediction = round(float(np.clip(weighted_points, 0, 100)), 1)
+        prediction_source = 'weighted_requirements'
     else:
         prediction = ml_prediction
         prediction_source = 'ml_model'
@@ -379,6 +406,7 @@ def predict():
             'prediction': prediction,
             'prediction_source': prediction_source,
             'ml_prediction': ml_prediction,
+            'requirements_total_weight': round(sum(r['weight'] for r in requirements), 2),
             'grade_letter': grade_letter,
             'message': message,
             'grading_mode': 'curve',
@@ -446,6 +474,7 @@ def predict():
         'prediction': prediction,
         'prediction_source': prediction_source,
         'ml_prediction': ml_prediction,
+        'requirements_total_weight': round(sum(r['weight'] for r in requirements), 2),
         'grade_letter': grade_letter,
         'message': message,
         'grading_mode': 'custom_score',
