@@ -312,8 +312,11 @@ def predict():
     if requirements:
         total_weight = sum(r['weight'] for r in requirements if r['weight'] > 0)
         if total_weight > 0:
-            weighted_sum = sum(r['score'] * r['weight'] for r in requirements)
-            prediction = round(float(np.clip(weighted_sum / total_weight, 0, 100)), 1)
+            # Syllabus-style point calculation:
+            # contribution = score * (weight / 100), so extra-credit weight (>100 total)
+            # adds points on top instead of being normalized away.
+            weighted_points = sum((r['score'] * r['weight']) / 100.0 for r in requirements)
+            prediction = round(float(np.clip(weighted_points, 0, 100)), 1)
             prediction_source = 'weighted_requirements'
         else:
             prediction = ml_prediction
