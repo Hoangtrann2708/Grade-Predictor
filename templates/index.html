@@ -52,8 +52,12 @@
                     <div><span class="dot dot-blue"></span> <span class="section-label-text">Input Requirements</span></div>
                     <button class="add-btn" onclick="addRequirement()">+ Add Requirement</button>
                 </div>
+                <div class="input-group">
+                    <label>Default Out Of (for single-number scores)</label>
+                    <input type="number" id="score-default-total" min="1" step="0.1" value="100" placeholder="e.g. 100 or 10">
+                </div>
                 <div id="requirements-list"></div>
-                <p class="section-desc" id="requirements-hint">Use one score box: type either a percent (85) or fraction (29/30). It auto-converts to score % when you leave the field.</p>
+                <p class="section-desc" id="requirements-hint">Use one score box: `29/30`, `85%`, or plain `10` (interpreted as 10 out of Default Out Of).</p>
             </div>
 
             <div class="card">
@@ -337,22 +341,29 @@ function addRequirement() {
     div.id = `requirement-${requirementCount}`;
     div.innerHTML = `
         <input type="text" placeholder="e.g. Midterm" class="requirement-name">
-        <input type="text" placeholder="Score (e.g. 85 or 29/30)" class="requirement-score" onblur="normalizeRequirementScore(${requirementCount})">
+        <input type="text" placeholder="Score (e.g. 29/30 or 85%)" class="requirement-score" oninput="updateRequirementPreview(${requirementCount})" onblur="normalizeRequirementScore(${requirementCount})">
         <input type="number" placeholder="Weight %" min="0" max="100" step="0.1" class="requirement-weight">
         <label class="extra-credit-check">
             <input type="checkbox" class="requirement-extra">
             <span>Extra</span>
         </label>
         <button class="factor-remove" onclick="removeRequirement(${requirementCount})">×</button>
+        <div class="requirement-preview" id="requirement-preview-${requirementCount}"></div>
     `;
     document.getElementById('requirements-list').appendChild(div);
     document.getElementById('requirements-hint').style.display = 'none';
 }
 
-function parseScoreToPercent(rawValue) {
+function parseScoreToPercent(rawValue, defaultTotal = 100) {
     if (rawValue === null || rawValue === undefined) return null;
     const txt = String(rawValue).trim();
     if (!txt) return null;
+
+    if (txt.endsWith('%')) {
+        const pctVal = parseFloat(txt.slice(0, -1));
+        if (isNaN(pctVal)) return null;
+        return Math.max(0, Math.min(100, pctVal));
+    }
 
     if (txt.includes('/')) {
         const parts = txt.split('/');
@@ -366,14 +377,36 @@ function parseScoreToPercent(rawValue) {
 
     const val = parseFloat(txt);
     if (isNaN(val)) return null;
-    return Math.max(0, Math.min(100, val));
+    if (defaultTotal <= 0 || isNaN(defaultTotal)) return null;
+    const pct = (val / defaultTotal) * 100;
+    return Math.max(0, Math.min(100, pct));
+}
+
+function getDefaultScoreTotal() {
+    const v = parseFloat(document.getElementById('score-default-total').value);
+    return (!isNaN(v) && v > 0) ? v : 100;
+}
+
+function updateRequirementPreview(id) {
+    const row = document.getElementById(`requirement-${id}`);
+    const preview = document.getElementById(`requirement-preview-${id}`);
+    if (!row || !preview) return;
+    const raw = row.querySelector('.requirement-score').value;
+    const pct = parseScoreToPercent(raw, getDefaultScoreTotal());
+    if (pct === null) {
+        preview.textContent = 'Invalid format. Use 29/30, 85%, or a plain number.';
+        preview.classList.add('preview-error');
+    } else {
+        preview.textContent = `Calculated: ${pct.toFixed(1)}%`;
+        preview.classList.remove('preview-error');
+    }
 }
 
 function normalizeRequirementScore(id) {
     const row = document.getElementById(`requirement-${id}`);
     if (!row) return;
     const percentInput = row.querySelector('.requirement-score');
-    const pct = parseScoreToPercent(percentInput.value);
+    const pct = parseScoreToPercent(percentInput.value, getDefaultScoreTotal());
     if (pct !== null) percentInput.value = pct.toFixed(1);
 }
 
@@ -444,7 +477,7 @@ async function submitPrediction() {
     reqRows.forEach(row => {
         const name = row.querySelector('.requirement-name').value.trim() || 'Unnamed';
         const scoreRaw = row.querySelector('.requirement-score').value;
-        const score = parseScoreToPercent(scoreRaw);
+        const score = parseScoreToPercent(scoreRaw, getDefaultScoreTotal());
         const weight = parseFloat(row.querySelector('.requirement-weight').value);
         const isExtraCredit = row.querySelector('.requirement-extra').checked;
         if (score !== null && !isNaN(weight) && weight > 0) {

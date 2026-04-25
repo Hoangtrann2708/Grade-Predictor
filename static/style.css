@@ -259,6 +259,7 @@ input:disabled { opacity: .4; cursor: not-allowed; }
 }
 .requirement-row {
     display: flex;
+    flex-wrap: wrap;
     gap: 10px;
     align-items: center;
     margin-bottom: 10px;
@@ -272,6 +273,13 @@ input:disabled { opacity: .4; cursor: not-allowed; }
 .factor-value { flex: 1; }
 .requirement-name { flex: 1.8; }
 .requirement-earned, .requirement-total, .requirement-score, .requirement-weight { flex: 0.8; min-width: 90px; }
+.requirement-preview {
+    flex: 1 1 100%;
+    margin-top: -4px;
+    font-size: 12px;
+    color: rgba(20,184,166,.9);
+}
+.requirement-preview.preview-error { color: #fca5a5; }
 .factor-name,
 .factor-value {
     color: #fff !important;
