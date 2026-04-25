@@ -118,6 +118,7 @@ def _validate_predict(data):
     curve_pct_a = curve_pct_b = curve_pct_c = None
     curve_class_avg = curve_class_sd = curve_class_median = None
     th_a = th_b = th_c = th_d = None
+    custom_scale = []
     opt_class_avg = opt_class_sd = opt_class_median = None
 
     if grading_mode == 'curve':
@@ -157,6 +158,56 @@ def _validate_predict(data):
                     'field': 'thresholds',
                     'message': 'A threshold must be >= B >= C >= D (e.g. 90 / 80 / 70 / 60).',
                 })
+
+        raw_scale = data.get('custom_scale')
+        if raw_scale is not None:
+            if not isinstance(raw_scale, list) or len(raw_scale) == 0:
+                errors.append({
+                    'field': 'custom_scale',
+                    'message': 'custom_scale must be a non-empty array when provided.',
+                })
+            else:
+                seen_labels = set()
+                for i, item in enumerate(raw_scale):
+                    if not isinstance(item, dict):
+                        errors.append({
+                            'field': f'custom_scale[{i}]',
+                            'message': 'Each custom scale item must be an object.',
+                        })
+                        continue
+                    label = str(item.get('label', '')).strip().upper()
+                    if not label:
+                        errors.append({
+                            'field': f'custom_scale[{i}].label',
+                            'message': 'Grade label is required.',
+                        })
+                    elif label in seen_labels:
+                        errors.append({
+                            'field': f'custom_scale[{i}].label',
+                            'message': f'Duplicate label "{label}" is not allowed.',
+                        })
+                    else:
+                        seen_labels.add(label)
+                    minimum = _num_field(
+                        item,
+                        'min',
+                        errors,
+                        label=f'Min score for {label or "grade"}',
+                        lo=0,
+                        hi=100,
+                        required=True,
+                    )
+                    if minimum is not None and label:
+                        custom_scale.append({'label': label, 'min': minimum})
+
+                if len(custom_scale) >= 2:
+                    for prev, curr in zip(custom_scale, custom_scale[1:]):
+                        if prev['min'] < curr['min']:
+                            errors.append({
+                                'field': 'custom_scale',
+                                'message': 'custom_scale must be ordered from highest min score to lowest.',
+                            })
+                            break
 
         if data.get('class_avg') not in (None, ''):
             opt_class_avg = _num_field(
@@ -203,6 +254,7 @@ def _validate_predict(data):
             'threshold_b': th_b,
             'threshold_c': th_c,
             'threshold_d': th_d,
+            'custom_scale': custom_scale,
         })
         if opt_class_avg is not None:
             parsed['class_avg'] = opt_class_avg
@@ -348,24 +400,43 @@ def predict():
     threshold_b = p['threshold_b']
     threshold_c = p['threshold_c']
     threshold_d = p['threshold_d']
+    custom_scale = p.get('custom_scale', [])
 
-    if prediction >= threshold_a:
-        grade_letter = 'A'
-        message = 'Excellent! Keep it up!'
-    elif prediction >= threshold_b:
-        grade_letter = 'B'
-        message = 'Great job! Almost there!'
-    elif prediction >= threshold_c:
-        grade_letter = 'C'
-        message = 'Not bad! You can do better!'
-    elif prediction >= threshold_d:
-        grade_letter = 'D'
-        message = 'Need to work harder!'
-    else:
+    if custom_scale:
         grade_letter = 'F'
-        message = 'Please study more!'
-
-    needed_for_a = max(0, round(threshold_a - prediction, 1))
+        for item in custom_scale:
+            if prediction >= item['min']:
+                grade_letter = item['label']
+                break
+        if grade_letter.startswith('A'):
+            message = 'Excellent! Keep it up!'
+        elif grade_letter.startswith('B'):
+            message = 'Great job! Almost there!'
+        elif grade_letter.startswith('C'):
+            message = 'Not bad! You can do better!'
+        elif grade_letter.startswith('D'):
+            message = 'Need to work harder!'
+        else:
+            message = 'Please study more!'
+        a_target = next((g['min'] for g in custom_scale if g['label'] == 'A'), threshold_a)
+        needed_for_a = max(0, round(a_target - prediction, 1))
+    else:
+        if prediction >= threshold_a:
+            grade_letter = 'A'
+            message = 'Excellent! Keep it up!'
+        elif prediction >= threshold_b:
+            grade_letter = 'B'
+            message = 'Great job! Almost there!'
+        elif prediction >= threshold_c:
+            grade_letter = 'C'
+            message = 'Not bad! You can do better!'
+        elif prediction >= threshold_d:
+            grade_letter = 'D'
+            message = 'Need to work harder!'
+        else:
+            grade_letter = 'F'
+            message = 'Please study more!'
+        needed_for_a = max(0, round(threshold_a - prediction, 1))
 
     response = {
         'ok': True,
@@ -380,6 +451,7 @@ def predict():
         'threshold_b': threshold_b,
         'threshold_c': threshold_c,
         'threshold_d': threshold_d,
+        'custom_scale': custom_scale,
     }
 
     if 'class_avg' in p:
