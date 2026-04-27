@@ -52,12 +52,8 @@
                     <div><span class="dot dot-blue"></span> <span class="section-label-text">Input Requirements</span></div>
                     <button class="add-btn" onclick="addRequirement()">+ Add Requirement</button>
                 </div>
-                <div class="input-group">
-                    <label>Default Out Of (for single-number scores)</label>
-                    <input type="number" id="score-default-total" min="1" step="0.1" value="100" placeholder="e.g. 10 or 100">
-                </div>
                 <div id="requirements-list"></div>
-                <p class="section-desc" id="requirements-hint"><strong>Your scores</strong> — name each item, your points, and weight. Numbers follow &ldquo;Default Out Of&rdquo; above. Open <strong>Class stats for this item</strong> only if the professor shared per-assignment class numbers (curve mode).</p>
+                <p class="section-desc" id="requirements-hint"><strong>Your scores</strong> — name each item, your points, and weight. Single-number scores use a <strong>100-point</strong> scale (common in the US), or enter a fraction (e.g. 8/10) or a percent. Open <strong>Class stats for this item</strong> only if the professor shared per-assignment class numbers (curve mode).</p>
             </div>
 
             <div class="card">
@@ -488,9 +484,9 @@ function parseScoreToBase(rawValue, defaultTotal = 100) {
     return Math.max(0, val);
 }
 
+/** Fixed 100-point scale for syllabus-style inputs (no configurable /10 vs /100). */
 function getDefaultScoreTotal() {
-    const v = parseFloat(document.getElementById('score-default-total').value);
-    return (!isNaN(v) && v > 0) ? v : 100;
+    return 100;
 }
 
 function updateRequirementPreview(id) {
@@ -502,7 +498,7 @@ function updateRequirementPreview(id) {
     const pct = parseScoreToPercent(raw, getDefaultScoreTotal());
     if (base === null || pct === null) {
         const denom = getDefaultScoreTotal();
-        preview.textContent = `Invalid input. Please enter a number between 0 and ${denom} based on your selected base.`;
+        preview.textContent = `Invalid input. Enter a number from 0 to ${denom}, a fraction (e.g. 8/10), or a percent.`;
         preview.classList.add('preview-error');
     } else {
         const denom = getDefaultScoreTotal();
@@ -1111,7 +1107,6 @@ warmupServerHealth();
 toggleLetterGrades();
 updateRequirementCurveStatsVisibility();
 refreshFactorAddSelect();
-document.getElementById('score-default-total').addEventListener('input', refreshScorePlaceholdersAndPreviews);
 </script>
 
 </body>
