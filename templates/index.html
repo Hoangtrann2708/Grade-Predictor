@@ -169,26 +169,6 @@
                 </div>
             </div>
 
-            <div class="card" id="section-class-stats-optional">
-                <div class="section-label"><span class="dot dot-orange"></span> Class comparison <span class="hint">(optional)</span></div>
-                <div class="stat-callout stat-callout--compact">
-                    <p class="stat-callout-body">Same idea: use when the professor has released <strong>whole-class</strong> summary stats so you can compare your weighted score to the class.</p>
-                </div>
-                <div class="stats-grid stats-grid-tight">
-                    <div class="input-group">
-                        <label>Class average</label>
-                        <input type="number" id="class_avg_opt" min="0" max="100" step="0.1" placeholder="e.g. 72.5">
-                    </div>
-                    <div class="input-group">
-                        <label>Std deviation</label>
-                        <input type="number" id="class_sd_opt" min="0" max="50" step="0.1" placeholder="e.g. 12">
-                    </div>
-                    <div class="input-group">
-                        <label>Median</label>
-                        <input type="number" id="class_median_opt" min="0" max="100" step="0.1" placeholder="e.g. 74">
-                    </div>
-                </div>
-            </div>
         </div>
 
     </div>
@@ -308,11 +288,11 @@ function showFormErrors(payload) {
     const errors = Array.isArray(payload && payload.errors) ? payload.errors : [];
     const lines = errors.length
         ? errors.map(e => {
-            const field = e.field ? `<code>${escapeHtml(String(e.field))}</code>: ` : '';
-            return `<li>${field}${escapeHtml(String(e.message || ''))}</li>`;
+            const msg = escapeHtml(String(e.message || ''));
+            return `<li>${msg}</li>`;
         }).join('')
         : `<li>${escapeHtml(String((payload && payload.error) || 'Something went wrong.'))}</li>`;
-    el.innerHTML = `<div class="form-error-title">Please fix the following:</div><ul>${lines}</ul>`;
+    el.innerHTML = `<div class="form-error-title">Almost there</div><p class="form-error-sub">A quick note before we calculate:</p><ul class="form-error-list">${lines}</ul>`;
     el.classList.remove('hidden');
     document.getElementById('results').classList.add('hidden');
     el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -330,7 +310,6 @@ function setMode(mode) {
     document.getElementById('btn-curve').classList.toggle('active', mode === 'curve');
     document.getElementById('section-custom').classList.toggle('hidden', mode !== 'custom_score');
     document.getElementById('section-curve').classList.toggle('hidden', mode !== 'curve');
-    document.getElementById('section-class-stats-optional').classList.toggle('hidden', mode !== 'custom_score');
     updateCurveRemainder();
     toggleLetterGrades();
 }
@@ -613,8 +592,7 @@ async function submitPrediction() {
     if (requirements.length === 0) {
         showFormErrors({
             errors: [{
-                field: 'requirements',
-                message: 'Add at least one requirement with a score and weight (click + Add Requirement).',
+                message: 'You need at least one graded item. Tap + Add Requirement, then enter your score and weight.',
             }],
         });
         return;
@@ -649,18 +627,11 @@ async function submitPrediction() {
         payload.threshold_b = parseFloat(document.getElementById('threshold_b').value) || 80;
         payload.threshold_c = parseFloat(document.getElementById('threshold_c').value) || 70;
         payload.threshold_d = parseFloat(document.getElementById('threshold_d').value) || 60;
-        const avg = document.getElementById('class_avg_opt').value;
-        if (avg) {
-            payload.class_avg    = parseFloat(avg);
-            payload.class_sd     = parseFloat(document.getElementById('class_sd_opt').value) || 10;
-            payload.class_median = parseFloat(document.getElementById('class_median_opt').value) || parseFloat(avg);
-        }
         if (payload.use_letter_grades && !(payload.threshold_a >= payload.threshold_b && payload.threshold_b >= payload.threshold_c && payload.threshold_c >= payload.threshold_d)) {
             showFormErrors({
                 errors: [{
-                    field: 'thresholds',
-                    message: 'A threshold must be ≥ B ≥ C ≥ D (e.g. 90 / 80 / 70 / 60).'
-                }]
+                    message: 'Letter thresholds should step down in order: A is highest, then B, C, and D (for example 90 / 80 / 70 / 60).',
+                }],
             });
             return;
         }
@@ -696,9 +667,8 @@ async function submitPrediction() {
         if (sum > 100.01) {
             showFormErrors({
                 errors: [{
-                    field: 'pct_total',
-                    message: 'A% + B% + C% cannot exceed 100%. D/F uses the remaining percent.'
-                }]
+                    message: 'The top three grade bands (A + B + C) add up to more than 100%. Try lowering them so D/F can use the rest.',
+                }],
             });
             return;
         }
@@ -712,7 +682,7 @@ async function submitPrediction() {
             const data = computePredictionLocally(payload);
             if (!data.ok) {
                 showFormErrors(data);
-                setRequestStatus('Add at least one graded requirement above.', 'warn');
+                setRequestStatus('Almost there — add one graded item above to continue.', 'warn');
                 return;
             }
             clearFormErrors();
@@ -773,8 +743,7 @@ function computePredictionLocally(payload) {
             ok: false,
             error: 'Validation failed',
             errors: [{
-                field: 'requirements',
-                message: 'Add at least one requirement with a score and weight.',
+                message: 'You need at least one graded item. Tap + Add Requirement, then enter your score and weight.',
             }],
         };
     }
