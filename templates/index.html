@@ -63,10 +63,15 @@
             <div class="card">
                 <div class="section-label-row">
                     <div><span class="dot dot-teal"></span> <span class="section-label-text">Optional Improvement Factors</span></div>
-                    <button class="add-btn" onclick="addFactor()">+ Add Factor</button>
+                    <select id="factor-add-select" class="factor-add-select" aria-label="Add improvement factor" onchange="addSelectedFactor()">
+                        <option value="">Add factor…</option>
+                        <option value="study_hours">Study hours</option>
+                        <option value="sleep_hours">Sleep hours</option>
+                        <option value="attendance">Attendance</option>
+                    </select>
                 </div>
                 <div id="custom-factors"></div>
-                <p class="section-desc" id="factor-hint">Optional only. Currently recognized: study hours, attendance, sleep hours, past GPA.</p>
+                <p class="section-desc" id="factor-hint">Optional. Pick one, two, or all three — each has a fixed unit (see row label). Leave empty to use sensible defaults for tips only.</p>
             </div>
         </div>
 
@@ -246,8 +251,14 @@
 
 <script>
 let currentMode = 'custom_score';
-let factorCount = 0;
 let requirementCount = 0;
+
+/** Fixed lifestyle factors (API still receives past_gpa default server-side). */
+const FACTOR_DEFS = {
+    study_hours: { label: 'Study hours', unit: 'h/day', default: 4, min: 0, max: 24, step: 0.25 },
+    sleep_hours: { label: 'Sleep hours', unit: 'h/day', default: 7, min: 0, max: 24, step: 0.25 },
+    attendance: { label: 'Attendance', unit: '%', default: 85, min: 0, max: 100, step: 0.5 },
+};
 const gradeVariants = new Set();
 // Experimental: compute predictions in browser to avoid backend wait.
 const INSTANT_NO_SERVER_MODE = true;
@@ -516,25 +527,54 @@ function removeRequirement(id) {
     }
 }
 
-function addFactor() {
-    factorCount++;
+function refreshFactorAddSelect() {
+    const sel = document.getElementById('factor-add-select');
+    if (!sel) return;
+    const active = new Set(
+        [...document.querySelectorAll('.factor-row[data-factor]')].map(r => r.dataset.factor),
+    );
+    [...sel.options].forEach(opt => {
+        if (!opt.value) return;
+        opt.disabled = active.has(opt.value);
+    });
+    sel.disabled = active.size >= Object.keys(FACTOR_DEFS).length;
+}
+
+function addSelectedFactor() {
+    const sel = document.getElementById('factor-add-select');
+    const key = sel && sel.value;
+    if (!key || !FACTOR_DEFS[key] || document.getElementById(`factor-row-${key}`)) {
+        if (sel) sel.value = '';
+        return;
+    }
+    const def = FACTOR_DEFS[key];
     const div = document.createElement('div');
     div.className = 'factor-row';
-    div.id = `factor-${factorCount}`;
+    div.id = `factor-row-${key}`;
+    div.dataset.factor = key;
     div.innerHTML = `
-        <input type="text" placeholder="e.g. Sleep hours" class="factor-name">
-        <input type="number" placeholder="Value" class="factor-value">
-        <button class="factor-remove" onclick="removeFactor(${factorCount})">×</button>
+        <span class="factor-fixed-label">${def.label}</span>
+        <div class="factor-value-wrap">
+            <input type="number" class="factor-value-input" min="${def.min}" max="${def.max}" step="${def.step}" value="${def.default}"
+                aria-label="${def.label} in ${def.unit}">
+            <span class="factor-unit">${def.unit}</span>
+        </div>
+        <button type="button" class="factor-remove" onclick="removeFactorRow('${key}')" aria-label="Remove ${def.label}">×</button>
     `;
     document.getElementById('custom-factors').appendChild(div);
     document.getElementById('factor-hint').style.display = 'none';
+    sel.value = '';
+    refreshFactorAddSelect();
 }
 
-function removeFactor(id) {
-    document.getElementById(`factor-${id}`).remove();
-    if (document.getElementById('custom-factors').children.length === 0) {
+function removeFactorRow(key) {
+    const el = document.getElementById(`factor-row-${key}`);
+    if (el) el.remove();
+    const list = document.getElementById('custom-factors');
+    if (list && list.children.length === 0) {
         document.getElementById('factor-hint').style.display = 'block';
     }
+    refreshFactorAddSelect();
 }
 
 function addGradeVariant(label) {
@@ -615,14 +655,14 @@ async function submitPrediction() {
         assign = weightedTotal / 100;
     }
 
-    const factors = document.querySelectorAll('.factor-row');
-    factors.forEach(f => {
-        const name = f.querySelector('.factor-name').value.toLowerCase();
-        const val  = parseFloat(f.querySelector('.factor-value').value) || 0;
-        if (name.includes('study')) study = val;
-        if (name.includes('attendance') || name.includes('attend')) attend = val;
-        if (name.includes('gpa') || name.includes('past')) past_gpa = val;
-        if (name.includes('sleep')) sleep_hours = val;
+    document.querySelectorAll('.factor-row[data-factor]').forEach(f => {
+        const key = f.dataset.factor;
+        const raw = f.querySelector('.factor-value-input')?.value;
+        const val = parseFloat(raw);
+        if (isNaN(val)) return;
+        if (key === 'study_hours') study = val;
+        else if (key === 'attendance') attend = val;
+        else if (key === 'sleep_hours') sleep_hours = val;
     });
 
     const payload = {
@@ -1070,6 +1110,7 @@ async function warmupServerHealth() {
 warmupServerHealth();
 toggleLetterGrades();
 updateRequirementCurveStatsVisibility();
+refreshFactorAddSelect();
 document.getElementById('score-default-total').addEventListener('input', refreshScorePlaceholdersAndPreviews);
 </script>
 
