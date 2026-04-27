@@ -1,12 +1,12 @@
 # Course Grade Predictor
 
-Course Grade Predictor is a Flask + ML web app that helps students estimate their final performance using:
+Course Grade Predictor is a Flask web app built around **syllabus-style grading**, not an ML-only guess:
 
 - weighted course components (including extra credit),
 - custom score thresholds (A/B/C/D with optional A-, B+, etc.),
-- and curve/percentile grading mode.
+- curve / percentile mode.
 
-It is built as a practical student tool, not just a model demo.
+The `/predict` endpoint scores from **those inputs only** (weights + scores + your chosen rules). Optional improvement rows are UI context; offline scripts in `model/train_model.py` remain for learning the ML training workflow.
 
 ## Demo
 
@@ -51,7 +51,7 @@ This app normalizes these inputs, applies the selected grading logic, and provid
 ## Tech Stack
 
 - **Backend:** Python, Flask
-- **ML:** scikit-learn, NumPy, SciPy, pandas
+- **Training pipeline (offline, `model/train_model.py`):** scikit-learn, NumPy, SciPy, pandas — not loaded by `/predict` at runtime
 - **Frontend:** HTML, CSS, JavaScript
 - **Production server:** Gunicorn
 - **Deployment:** Vercel (frontend / instant UI), Render / Railway (Flask API)

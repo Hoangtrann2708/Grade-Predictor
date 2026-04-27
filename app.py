@@ -1,8 +1,6 @@
 from flask import Flask, render_template, request, jsonify
 import math
-import pickle
 import time
-import numpy as np
 from scipy import stats
 
 app = Flask(__name__)
@@ -137,6 +135,12 @@ def _validate_predict(data):
                 'weight': wtf,
                 'is_extra_credit': is_extra_credit,
             })
+
+    if not parsed_requirements:
+        errors.append({
+            'field': 'requirements',
+            'message': 'Add at least one requirement with a score and a positive weight.',
+        })
 
     curve_pct_a = curve_pct_b = curve_pct_c = None
     curve_class_avg = curve_class_sd = curve_class_median = None
@@ -329,13 +333,6 @@ def _validate_predict(data):
 
     return parsed, []
 
-with open('model/grade_model.pkl', 'rb') as f:
-    model = pickle.load(f)
-
-with open('model/scaler.pkl', 'rb') as f:
-    scaler = pickle.load(f)
-
-
 @app.route('/')
 def home():
     return render_template('index.html')
@@ -358,42 +355,23 @@ def predict():
         return jsonify({'ok': False, 'error': 'Validation failed', 'errors': errors}), 400
 
     p = parsed
-    study_hours = p['study_hours']
-    attendance = p['attendance']
-    assignment_avg = p['assignment_avg']
-    past_gpa = p['past_gpa']
-    sleep_hours = p['sleep_hours']
     grading_mode = p['grading_mode']
 
-    # ── ML prediction ──
-    features = np.array([[study_hours, attendance, assignment_avg,
-                          past_gpa, sleep_hours]])
-    features_scaled = scaler.transform(features)
-    ml_prediction = model.predict(features_scaled)[0]
-    ml_prediction = round(float(np.clip(ml_prediction, 0, 100)), 1)
-
-    # If user provided course components, use their weighted score for grading.
-    # This matches real syllabus math (score * weight), which users expect.
+    # Syllabus-style weighted score only (validated: at least one requirement).
     requirements = p.get('requirements', [])
-    if requirements:
-        # Syllabus-style point calculation:
-        # contribution = score * (weight / 100), so extra-credit adds on top.
-        base_points = sum(
-            (r['score'] * r['weight']) / 100.0
-            for r in requirements
-            if not r.get('is_extra_credit')
-        )
-        extra_credit_points = sum(
-            (r['score'] * r['weight']) / 100.0
-            for r in requirements
-            if r.get('is_extra_credit')
-        )
-        weighted_points = base_points + extra_credit_points
-        prediction = round(float(np.clip(weighted_points, 0, 100)), 1)
-        prediction_source = 'weighted_requirements'
-    else:
-        prediction = ml_prediction
-        prediction_source = 'ml_model'
+    base_points = sum(
+        (r['score'] * r['weight']) / 100.0
+        for r in requirements
+        if not r.get('is_extra_credit')
+    )
+    extra_credit_points = sum(
+        (r['score'] * r['weight']) / 100.0
+        for r in requirements
+        if r.get('is_extra_credit')
+    )
+    weighted_points = base_points + extra_credit_points
+    prediction = round(float(max(0.0, min(100.0, weighted_points))), 1)
+    prediction_source = 'weighted_requirements'
 
     score_scale_base = p.get('score_scale_base', 100.0)
     prediction_display = round((prediction * score_scale_base) / 100.0, 2)
@@ -481,7 +459,6 @@ def predict():
             'score_scale_base': score_scale_base,
             'use_letter_grades': True,
             'prediction_source': prediction_source,
-            'ml_prediction': ml_prediction,
             'requirements_total_weight': round(sum(r['weight'] for r in requirements), 2),
             'grade_letter': grade_letter,
             'message': message,
@@ -558,7 +535,6 @@ def predict():
         'score_scale_base': score_scale_base,
         'use_letter_grades': use_letter_grades,
         'prediction_source': prediction_source,
-        'ml_prediction': ml_prediction,
         'requirements_total_weight': round(sum(r['weight'] for r in requirements), 2),
         'grade_letter': grade_letter,
         'message': message,
