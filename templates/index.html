@@ -57,7 +57,7 @@
                     <input type="number" id="score-default-total" min="1" step="0.1" value="100" placeholder="e.g. 10 or 100">
                 </div>
                 <div id="requirements-list"></div>
-                <p class="section-desc" id="requirements-hint">Enter only numbers based on your selected base. If base is 10, enter scores from 0-10. If base is 100, enter scores from 0-100. In Curve mode, expand <strong>Class stats (optional)</strong> on a row to enter class avg / SD / median for that component.</p>
+                <p class="section-desc" id="requirements-hint"><strong>Your scores</strong> — name each item, your points, and weight. Numbers follow &ldquo;Default Out Of&rdquo; above. Open <strong>Class stats for this item</strong> only if the professor shared per-assignment class numbers (curve mode).</p>
             </div>
 
             <div class="card">
@@ -117,7 +117,7 @@
 
             <div class="card hidden" id="section-curve">
                 <div class="section-label"><span class="dot dot-orange"></span> Curve Settings</div>
-                <p class="section-desc">Set grade distribution % and class statistics from your professor</p>
+                <p class="section-desc">How letter grades map to the class curve (% in each band). Whole-class stats below are only for after the instructor shares class-wide averages.</p>
 
                 <div class="sub-label">Grade Distribution</div>
                 <div class="curve-grid">
@@ -148,36 +148,43 @@
                 </div>
                 <div id="pct-warning" class="pct-warning hidden">⚠️ A% + B% + C% cannot exceed 100% (D/F is the rest)</div>
 
-                <div class="sub-label" style="margin-top: 20px;">Class Statistics <span class="hint">(fallback — used when a requirement row leaves class stats blank)</span></div>
-                <div class="stats-grid">
+                <div class="sub-label" style="margin-top: 20px;">Whole-class statistics</div>
+                <div class="stat-callout">
+                    <p class="stat-callout-title">Use after the instructor publishes class-wide results</p>
+                    <p class="stat-callout-body">Enter the <strong>overall class</strong> average, standard deviation, and median once grading is done and the syllabus or LMS shows summary stats for everyone — not your personal grade. If you already entered per-item class stats under each requirement, those take priority; leave these blank or use them as a fallback.</p>
+                </div>
+                <div class="stats-grid stats-grid-tight">
                     <div class="input-group">
-                        <label>📊 Class Average</label>
+                        <label>Class average</label>
                         <input type="number" id="class_avg" min="0" max="100" step="0.1" placeholder="e.g. 72.5">
                     </div>
                     <div class="input-group">
-                        <label>📏 Std Deviation</label>
+                        <label>Std deviation</label>
                         <input type="number" id="class_sd" min="0" max="50" step="0.1" placeholder="e.g. 12">
                     </div>
                     <div class="input-group">
-                        <label>📐 Median</label>
+                        <label>Median</label>
                         <input type="number" id="class_median" min="0" max="100" step="0.1" placeholder="e.g. 74">
                     </div>
                 </div>
             </div>
 
             <div class="card" id="section-class-stats-optional">
-                <div class="section-label"><span class="dot dot-orange"></span> Class Stats <span class="hint">(optional — compare with class)</span></div>
-                <div class="stats-grid">
+                <div class="section-label"><span class="dot dot-orange"></span> Class comparison <span class="hint">(optional)</span></div>
+                <div class="stat-callout stat-callout--compact">
+                    <p class="stat-callout-body">Same idea: use when the professor has released <strong>whole-class</strong> summary stats so you can compare your weighted score to the class.</p>
+                </div>
+                <div class="stats-grid stats-grid-tight">
                     <div class="input-group">
-                        <label>📊 Class Average</label>
+                        <label>Class average</label>
                         <input type="number" id="class_avg_opt" min="0" max="100" step="0.1" placeholder="e.g. 72.5">
                     </div>
                     <div class="input-group">
-                        <label>📏 Std Deviation</label>
+                        <label>Std deviation</label>
                         <input type="number" id="class_sd_opt" min="0" max="50" step="0.1" placeholder="e.g. 12">
                     </div>
                     <div class="input-group">
-                        <label>📐 Median</label>
+                        <label>Median</label>
                         <input type="number" id="class_median_opt" min="0" max="100" step="0.1" placeholder="e.g. 74">
                     </div>
                 </div>
@@ -374,26 +381,38 @@ function addRequirement() {
     div.id = `requirement-${requirementCount}`;
     const scorePlaceholder = getScorePlaceholder(getDefaultScoreTotal());
     div.innerHTML = `
-        <input type="text" placeholder="e.g. Midterm" class="requirement-name">
-        <input type="text" placeholder="${scorePlaceholder}" class="requirement-score" oninput="updateRequirementPreview(${requirementCount})" onblur="normalizeRequirementScore(${requirementCount})">
-        <input type="number" placeholder="Weight %" min="0" max="100" step="0.1" class="requirement-weight">
-        <label class="extra-credit-check">
-            <input type="checkbox" class="requirement-extra">
-            <span>Extra</span>
-        </label>
-        <button class="factor-remove" onclick="removeRequirement(${requirementCount})">×</button>
-        <button type="button" class="toggle-comp-stats-btn" onclick="toggleRequirementCompStats(${requirementCount})" aria-expanded="false" aria-controls="requirement-comp-panel-${requirementCount}">
-            Class stats <span class="hint">(optional)</span> <span class="req-stats-chevron" aria-hidden="true">▾</span>
-        </button>
-        <div id="requirement-comp-panel-${requirementCount}" class="requirement-comp-stats-panel hidden" role="region" aria-label="Class statistics for curve mode">
-            <div class="requirement-comp-stats">
-                <span class="requirement-comp-label">Avg · SD · Median</span>
-                <input type="number" class="requirement-comp-avg" min="0" max="100" step="0.1" placeholder="Avg" title="Class average for this component (Curve mode)">
-                <input type="number" class="requirement-comp-sd" min="0" max="50" step="0.1" placeholder="SD" title="Std dev for this component (Curve mode)">
-                <input type="number" class="requirement-comp-median" min="0" max="100" step="0.1" placeholder="Median" title="Median for this component (Curve mode)">
-            </div>
+        <div class="requirement-main">
+            <input type="text" placeholder="Item name (e.g. Midterm 1)" class="requirement-name" aria-label="Requirement name">
+            <input type="text" placeholder="${scorePlaceholder}" class="requirement-score" aria-label="Your score" oninput="updateRequirementPreview(${requirementCount})" onblur="normalizeRequirementScore(${requirementCount})">
+            <input type="number" placeholder="Weight %" min="0" max="100" step="0.1" class="requirement-weight" aria-label="Weight percent">
+            <label class="extra-credit-check">
+                <input type="checkbox" class="requirement-extra">
+                <span>Extra</span>
+            </label>
+            <button type="button" class="factor-remove" onclick="removeRequirement(${requirementCount})" title="Remove row" aria-label="Remove requirement">×</button>
         </div>
         <div class="requirement-preview" id="requirement-preview-${requirementCount}"></div>
+        <button type="button" class="toggle-comp-stats-btn" onclick="toggleRequirementCompStats(${requirementCount})" aria-expanded="false" aria-controls="requirement-comp-panel-${requirementCount}">
+            <span class="toggle-comp-stats-text"><span class="toggle-comp-stats-summary">Class stats for this item</span><span class="hint"> · optional · curve only</span></span>
+            <span class="req-stats-chevron" aria-hidden="true">▾</span>
+        </button>
+        <div id="requirement-comp-panel-${requirementCount}" class="requirement-comp-stats-panel hidden" role="region" aria-label="Class distribution for this assignment">
+            <p class="requirement-comp-intro">If your professor shared <strong>class-wide</strong> stats for this assignment only (after grades were released), enter them here.</p>
+            <div class="requirement-comp-stats">
+                <div class="requirement-comp-field">
+                    <label class="requirement-comp-field-label" for="req-comp-avg-${requirementCount}">Class avg</label>
+                    <input id="req-comp-avg-${requirementCount}" type="number" class="requirement-comp-avg" min="0" max="100" step="0.1" placeholder="—">
+                </div>
+                <div class="requirement-comp-field">
+                    <label class="requirement-comp-field-label" for="req-comp-sd-${requirementCount}">Std dev</label>
+                    <input id="req-comp-sd-${requirementCount}" type="number" class="requirement-comp-sd" min="0" max="50" step="0.1" placeholder="—">
+                </div>
+                <div class="requirement-comp-field">
+                    <label class="requirement-comp-field-label" for="req-comp-med-${requirementCount}">Median</label>
+                    <input id="req-comp-med-${requirementCount}" type="number" class="requirement-comp-median" min="0" max="100" step="0.1" placeholder="—">
+                </div>
+            </div>
+        </div>
     `;
     document.getElementById('requirements-list').appendChild(div);
     document.getElementById('requirements-hint').style.display = 'none';
@@ -591,6 +610,15 @@ async function submitPrediction() {
             totalWeight += weight;
         }
     });
+    if (requirements.length === 0) {
+        showFormErrors({
+            errors: [{
+                field: 'requirements',
+                message: 'Add at least one requirement with a score and weight (click + Add Requirement).',
+            }],
+        });
+        return;
+    }
     if (totalWeight > 0) {
         // Match syllabus math (sum(score * weight/100)).
         // This preserves extra-credit effect instead of normalizing by total weight.
@@ -682,6 +710,11 @@ async function submitPrediction() {
 
         if (INSTANT_NO_SERVER_MODE) {
             const data = computePredictionLocally(payload);
+            if (!data.ok) {
+                showFormErrors(data);
+                setRequestStatus('Add at least one graded requirement above.', 'warn');
+                return;
+            }
             clearFormErrors();
             clearRequestStatus();
             displayResults(data, study, attend, assign, totalWeight);
@@ -735,18 +768,23 @@ async function submitPrediction() {
 
 function computePredictionLocally(payload) {
     const requirements = Array.isArray(payload.requirements) ? payload.requirements : [];
-    let predictionPercent;
-    if (requirements.length > 0) {
-        const basePoints = requirements
-            .filter(r => !r.is_extra_credit)
-            .reduce((s, r) => s + ((r.score * r.weight) / 100), 0);
-        const extraPoints = requirements
-            .filter(r => r.is_extra_credit)
-            .reduce((s, r) => s + ((r.score * r.weight) / 100), 0);
-        predictionPercent = Math.max(0, Math.min(100, basePoints + extraPoints));
-    } else {
-        predictionPercent = Math.max(0, Math.min(100, payload.assignment_avg || 0));
+    if (requirements.length === 0) {
+        return {
+            ok: false,
+            error: 'Validation failed',
+            errors: [{
+                field: 'requirements',
+                message: 'Add at least one requirement with a score and weight.',
+            }],
+        };
     }
+    const basePoints = requirements
+        .filter(r => !r.is_extra_credit)
+        .reduce((s, r) => s + ((r.score * r.weight) / 100), 0);
+    const extraPoints = requirements
+        .filter(r => r.is_extra_credit)
+        .reduce((s, r) => s + ((r.score * r.weight) / 100), 0);
+    const predictionPercent = Math.max(0, Math.min(100, basePoints + extraPoints));
 
     const scoreScaleBase = Number(payload.score_scale_base || 100);
     const predictionDisplay = Number(((predictionPercent * scoreScaleBase) / 100).toFixed(2));
@@ -814,7 +852,6 @@ function computePredictionLocally(payload) {
             prediction_display: predictionDisplay,
             score_scale_base: scoreScaleBase,
             prediction_source: 'instant_local',
-            ml_prediction: Number(predictionPercent.toFixed(1)),
             grade_letter: gradeLetter,
             message,
             grading_mode: 'curve',
@@ -892,7 +929,6 @@ function computePredictionLocally(payload) {
         prediction_display: predictionDisplay,
         score_scale_base: scoreScaleBase,
         prediction_source: 'instant_local',
-        ml_prediction: Number(predictionPercent.toFixed(1)),
         grade_letter: gradeLetter,
         message,
         grading_mode: 'custom_score',
