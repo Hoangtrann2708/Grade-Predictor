@@ -57,7 +57,7 @@
                     <input type="number" id="score-default-total" min="1" step="0.1" value="100" placeholder="e.g. 10 or 100">
                 </div>
                 <div id="requirements-list"></div>
-                <p class="section-desc" id="requirements-hint">Enter only numbers based on your selected base. If base is 10, enter scores from 0-10. If base is 100, enter scores from 0-100.</p>
+                <p class="section-desc" id="requirements-hint">Enter only numbers based on your selected base. If base is 10, enter scores from 0-10. If base is 100, enter scores from 0-100. In Curve mode, optional <strong>class avg / SD / median</strong> per row refine the percentile (leave blank on a row if you do not have stats for that item).</p>
             </div>
 
             <div class="card">
@@ -148,7 +148,7 @@
                 </div>
                 <div id="pct-warning" class="pct-warning hidden">⚠️ A% + B% + C% cannot exceed 100% (D/F is the rest)</div>
 
-                <div class="sub-label" style="margin-top: 20px;">Class Statistics <span class="hint">(from your professor)</span></div>
+                <div class="sub-label" style="margin-top: 20px;">Class Statistics <span class="hint">(fallback — used when a requirement row leaves class stats blank)</span></div>
                 <div class="stats-grid">
                     <div class="input-group">
                         <label>📊 Class Average</label>
@@ -162,14 +162,6 @@
                         <label>📐 Median</label>
                         <input type="number" id="class_median" min="0" max="100" step="0.1" placeholder="e.g. 74">
                     </div>
-                </div>
-                <label class="extra-credit-check" style="margin-top: 12px; display: inline-flex;">
-                    <input type="checkbox" id="curve-use-component-stats" onchange="toggleCurveComponentStats()">
-                    <span>Use per-component class stats (e.g. Midterm 1, Midterm 2)</span>
-                </label>
-                <div id="curve-component-stats-wrap" class="hidden" style="margin-top: 12px;">
-                    <div class="section-desc">Add class stats for each component. If a component is missing, global class stats are used as fallback.</div>
-                    <div id="curve-component-stats-list"></div>
                 </div>
             </div>
 
@@ -334,7 +326,6 @@ function setMode(mode) {
     document.getElementById('section-class-stats-optional').classList.toggle('hidden', mode !== 'custom_score');
     updateCurveRemainder();
     toggleLetterGrades();
-    syncCurveComponentRows();
 }
 
 function toggleLetterGrades() {
@@ -378,11 +369,16 @@ function addRequirement() {
             <span>Extra</span>
         </label>
         <button class="factor-remove" onclick="removeRequirement(${requirementCount})">×</button>
+        <div class="requirement-comp-stats">
+            <span class="requirement-comp-label">Class stats <span class="hint">(optional)</span></span>
+            <input type="number" class="requirement-comp-avg" min="0" max="100" step="0.1" placeholder="Avg" title="Class average for this component (Curve mode)">
+            <input type="number" class="requirement-comp-sd" min="0" max="50" step="0.1" placeholder="SD" title="Std dev for this component (Curve mode)">
+            <input type="number" class="requirement-comp-median" min="0" max="100" step="0.1" placeholder="Median" title="Median for this component (Curve mode)">
+        </div>
         <div class="requirement-preview" id="requirement-preview-${requirementCount}"></div>
     `;
     document.getElementById('requirements-list').appendChild(div);
     document.getElementById('requirements-hint').style.display = 'none';
-    syncCurveComponentRows();
 }
 
 function getScorePlaceholder(defaultTotal) {
@@ -490,7 +486,6 @@ function removeRequirement(id) {
     if (document.getElementById('requirements-list').children.length === 0) {
         document.getElementById('requirements-hint').style.display = 'block';
     }
-    syncCurveComponentRows();
 }
 
 function addFactor() {
@@ -529,57 +524,15 @@ function addGradeVariant(label) {
     document.getElementById('grade-variants').appendChild(wrapper);
 }
 
-function toggleCurveComponentStats() {
-    const enabled = document.getElementById('curve-use-component-stats').checked;
-    document.getElementById('curve-component-stats-wrap').classList.toggle('hidden', !enabled);
-    if (enabled) syncCurveComponentRows();
-}
-
-function getRequirementEntries() {
-    return Array.from(document.querySelectorAll('.requirement-row')).map((row, idx) => ({
-        id: row.id || `requirement-${idx + 1}`,
-        name: (row.querySelector('.requirement-name')?.value || '').trim() || `Requirement ${idx + 1}`,
-    }));
-}
-
-function syncCurveComponentRows() {
-    const list = document.getElementById('curve-component-stats-list');
-    if (!list) return;
-    const prev = new Map();
-    list.querySelectorAll('.curve-component-row').forEach(row => {
-        const key = row.dataset.requirementId;
-        prev.set(key, {
-            avg: row.querySelector('.curve-comp-avg')?.value || '',
-            sd: row.querySelector('.curve-comp-sd')?.value || '',
-            median: row.querySelector('.curve-comp-median')?.value || '',
-        });
-    });
-
-    const reqs = getRequirementEntries();
-    list.innerHTML = '';
-    reqs.forEach(req => {
-        const old = prev.get(req.id) || {};
-        const row = document.createElement('div');
-        row.className = 'curve-component-row';
-        row.dataset.requirementId = req.id;
-        row.innerHTML = `
-            <div class="curve-comp-name">${escapeHtml(req.name)}</div>
-            <input type="number" class="curve-comp-avg" min="0" max="100" step="0.1" placeholder="Class Avg" value="${old.avg || ''}">
-            <input type="number" class="curve-comp-sd" min="0" max="50" step="0.1" placeholder="Std Dev" value="${old.sd || ''}">
-            <input type="number" class="curve-comp-median" min="0" max="100" step="0.1" placeholder="Median" value="${old.median || ''}">
-        `;
-        list.appendChild(row);
-    });
-}
-
-function getCurveComponentStatsFromForm() {
+/** Curve mode: stats keyed by requirement name (lowercase). Only rows with all three fields filled are included. */
+function getCurveComponentStatsFromRequirementRows() {
     const byName = {};
-    document.querySelectorAll('.curve-component-row').forEach(row => {
-        const name = (row.querySelector('.curve-comp-name')?.textContent || '').trim();
+    document.querySelectorAll('.requirement-row').forEach(row => {
+        const name = (row.querySelector('.requirement-name')?.value || '').trim();
         if (!name) return;
-        const avg = parseFloat(row.querySelector('.curve-comp-avg')?.value);
-        const sd = parseFloat(row.querySelector('.curve-comp-sd')?.value);
-        const median = parseFloat(row.querySelector('.curve-comp-median')?.value);
+        const avg = parseFloat(row.querySelector('.requirement-comp-avg')?.value);
+        const sd = parseFloat(row.querySelector('.requirement-comp-sd')?.value);
+        const median = parseFloat(row.querySelector('.requirement-comp-median')?.value);
         if (!isNaN(avg) && !isNaN(sd) && !isNaN(median) && sd >= 0) {
             byName[name.toLowerCase()] = { class_avg: avg, class_sd: sd, class_median: median };
         }
@@ -691,8 +644,8 @@ async function submitPrediction() {
         payload.class_avg    = parseFloat(document.getElementById('class_avg').value) || 75;
         payload.class_sd     = parseFloat(document.getElementById('class_sd').value) || 10;
         payload.class_median = parseFloat(document.getElementById('class_median').value) || 75;
-        payload.curve_use_component_stats = document.getElementById('curve-use-component-stats').checked;
-        payload.curve_component_stats = getCurveComponentStatsFromForm();
+        payload.curve_component_stats = getCurveComponentStatsFromRequirementRows();
+        payload.curve_use_component_stats = Object.keys(payload.curve_component_stats || {}).length > 0;
         const sum = payload.pct_a + payload.pct_b + payload.pct_c;
         if (sum > 100.01) {
             showFormErrors({
@@ -1081,7 +1034,6 @@ async function warmupServerHealth() {
 
 warmupServerHealth();
 toggleLetterGrades();
-toggleCurveComponentStats();
 document.getElementById('score-default-total').addEventListener('input', refreshScorePlaceholdersAndPreviews);
 </script>
 
