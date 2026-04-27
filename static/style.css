@@ -133,7 +133,7 @@ body {
     outline: none;
     transition: border-color .2s;
 }
-.input-group input:focus, .threshold-input:focus, .curve-input:focus, .factor-name:focus, .factor-value:focus, .requirement-name:focus, .requirement-earned:focus, .requirement-total:focus, .requirement-score:focus, .requirement-weight:focus, .requirement-comp-avg:focus, .requirement-comp-sd:focus, .requirement-comp-median:focus {
+.input-group input:focus, .threshold-input:focus, .curve-input:focus, .factor-name:focus, .factor-value:focus, .requirement-name:focus, .requirement-earned:focus, .requirement-total:focus, .requirement-score:focus, .requirement-weight:focus {
     border-color: #6366f1;
 }
 input::placeholder { color: rgba(255,255,255,.2); }
@@ -261,96 +261,6 @@ input:disabled { opacity: .4; cursor: not-allowed; }
     color: rgba(255, 255, 255, 0.65);
     font-weight: 600;
 }
-.toggle-comp-stats-btn {
-    flex: 1 1 100%;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 10px;
-    margin-top: 0;
-    padding: 8px 12px;
-    border-radius: 10px;
-    border: 1px dashed rgba(255,255,255,.1);
-    background: rgba(255,255,255,.02);
-    color: rgba(255,255,255,.65);
-    font-size: 12px;
-    font-weight: 600;
-    font-family: 'DM Sans', sans-serif;
-    cursor: pointer;
-    text-align: left;
-    transition: border-color .2s, background .2s;
-}
-.toggle-comp-stats-summary {
-    font-weight: 700;
-    color: rgba(255,255,255,.78);
-}
-.toggle-comp-stats-btn:hover {
-    border-color: rgba(99,102,241,.35);
-    background: rgba(99,102,241,.08);
-    color: rgba(255,255,255,.85);
-}
-.toggle-comp-stats-btn:hover .toggle-comp-stats-summary {
-    color: #fff;
-}
-.toggle-comp-stats-btn .req-stats-chevron {
-    flex-shrink: 0;
-    font-size: 11px;
-    opacity: .7;
-}
-.requirement-comp-stats-panel {
-    flex: 1 1 100%;
-}
-.requirement-comp-intro {
-    margin: 0 0 10px;
-    font-size: 11px;
-    line-height: 1.45;
-    color: rgba(255,255,255,.38);
-}
-.requirement-comp-intro strong {
-    color: rgba(255,255,255,.55);
-    font-weight: 600;
-}
-.requirement-comp-stats {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 10px;
-    align-items: end;
-    margin: 0;
-    padding: 10px 12px;
-    border-radius: 10px;
-    background: rgba(0,0,0,.18);
-    border: 1px solid rgba(255,255,255,.06);
-}
-.requirement-comp-field {
-    min-width: 0;
-}
-.requirement-comp-field-label {
-    display: block;
-    font-size: 10px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: rgba(255,255,255,.35);
-    margin-bottom: 5px;
-}
-.requirement-comp-avg,
-.requirement-comp-sd,
-.requirement-comp-median {
-    width: 100%;
-    padding: 10px 12px;
-    border-radius: 10px;
-    border: 1px solid rgba(255,255,255,.1);
-    background: rgba(255,255,255,.05);
-    color: #fff;
-    font-size: 14px;
-    font-weight: 600;
-}
-.requirement-comp-avg:focus,
-.requirement-comp-sd:focus,
-.requirement-comp-median:focus {
-    border-color: #6366f1;
-}
-
 /* ── Factors ── */
 .add-btn {
     background: rgba(20,184,166,.15);
@@ -417,10 +327,7 @@ input:disabled { opacity: .4; cursor: not-allowed; }
 .requirement-earned,
 .requirement-total,
 .requirement-score,
-.requirement-weight,
-.requirement-comp-avg,
-.requirement-comp-sd,
-.requirement-comp-median {
+.requirement-weight {
     color: #fff !important;
     background: rgba(255,255,255,.05) !important;
     caret-color: #fff;
@@ -430,10 +337,7 @@ input:disabled { opacity: .4; cursor: not-allowed; }
 .requirement-earned::placeholder,
 .requirement-total::placeholder,
 .requirement-score::placeholder,
-.requirement-weight::placeholder,
-.requirement-comp-avg::placeholder,
-.requirement-comp-sd::placeholder,
-.requirement-comp-median::placeholder {
+.requirement-weight::placeholder {
     color: rgba(255,255,255,.35);
 }
 .extra-credit-check {
@@ -736,9 +640,6 @@ input:disabled { opacity: .4; cursor: not-allowed; }
     .curve-grid { grid-template-columns: 1fr 1fr; }
     .comparison-grid { grid-template-columns: 1fr 1fr; }
     .stats-grid { grid-template-columns: 1fr; }
-    .requirement-comp-stats {
-        grid-template-columns: 1fr;
-    }
     .mode-toggle { flex-direction: column; }
     .requirement-main {
         grid-template-columns: 1fr 1fr;
