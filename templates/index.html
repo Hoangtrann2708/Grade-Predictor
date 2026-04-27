@@ -53,7 +53,7 @@
                     <button class="add-btn" onclick="addRequirement()">+ Add Requirement</button>
                 </div>
                 <div id="requirements-list"></div>
-                <p class="section-desc" id="requirements-hint"><strong>Your scores</strong> — name each item, your points, and weight. Single-number scores use a <strong>100-point</strong> scale (common in the US), or enter a fraction (e.g. 8/10) or a percent. Open <strong>Class stats for this item</strong> only if the professor shared per-assignment class numbers (curve mode).</p>
+                <p class="section-desc" id="requirements-hint"><strong>Your scores:</strong> name, points, weight per row. Use 0–100, a fraction (e.g. 17/20), or a %. <strong>Class stats for this item:</strong> Curve mode only.</p>
             </div>
 
             <div class="card">
@@ -67,7 +67,7 @@
                     </select>
                 </div>
                 <div id="custom-factors"></div>
-                <p class="section-desc" id="factor-hint">Optional. Pick one, two, or all three — each has a fixed unit (see row label). Leave empty to use sensible defaults for tips only.</p>
+                <p class="section-desc" id="factor-hint">Optional. Add study, sleep, and/or attendance; units show on each row.</p>
             </div>
         </div>
 
@@ -75,7 +75,7 @@
         <div>
             <div class="card" id="section-custom">
                 <div class="section-label"><span class="dot dot-green"></span> Grade Thresholds</div>
-                <p class="section-desc">Set the minimum score for each grade (your professor's scale)</p>
+                <p class="section-desc">Minimum score for each letter (100-point scale).</p>
                 <label class="extra-credit-check" style="margin-bottom: 10px; display: inline-flex;">
                     <input type="checkbox" id="use-letter-grades" checked onchange="toggleLetterGrades()">
                     <span>Use letter grades (A/B/C/D)</span>
@@ -103,7 +103,7 @@
                     </div>
                 </div>
                 <div class="sub-label" id="advanced-grade-label" style="margin-top: 16px;">Advanced Grade Options</div>
-                <p class="section-desc">Optional: add letter variants like A-, B+, B-. Each variant gets its own minimum score.</p>
+                <p class="section-desc">Optional letter variants (A-, B+, …), each with its own cutoff.</p>
                 <div class="grade-option-buttons" id="grade-option-buttons">
                     <button type="button" class="add-btn" onclick="addGradeVariant('A-')">+ A-</button>
                     <button type="button" class="add-btn" onclick="addGradeVariant('B+')">+ B+</button>
@@ -118,7 +118,7 @@
 
             <div class="card hidden" id="section-curve">
                 <div class="section-label"><span class="dot dot-orange"></span> Curve Settings</div>
-                <p class="section-desc">How letter grades map to the class curve (% in each band). Whole-class stats below are only for after the instructor shares class-wide averages.</p>
+                <p class="section-desc">Rough % of the class in each letter band. Fill whole-class stats when you have them.</p>
 
                 <div class="sub-label">Grade Distribution</div>
                 <div class="curve-grid">
@@ -151,8 +151,8 @@
 
                 <div class="sub-label" style="margin-top: 20px;">Whole-class statistics</div>
                 <div class="stat-callout">
-                    <p class="stat-callout-title">Use after the instructor publishes class-wide results</p>
-                    <p class="stat-callout-body">Enter the <strong>overall class</strong> average, standard deviation, and median once grading is done and the syllabus or LMS shows summary stats for everyone — not your personal grade. If you enter per-item class stats under each requirement (Curve mode), those take priority; leave whole-class fields as a fallback.</p>
+                    <p class="stat-callout-title">After class-wide grades are posted</p>
+                    <p class="stat-callout-body">Overall class average, SD, and median (not your score). Per-row requirement stats override these when filled.</p>
                 </div>
                 <div class="stats-grid stats-grid-tight">
                     <div class="input-group">
@@ -208,19 +208,19 @@
                     <div class="section-label"><span class="dot dot-blue"></span> Class Comparison</div>
                     <div class="comparison-grid">
                         <div class="comp-item">
-                            <div class="comp-value" id="comp-percentile">—</div>
+                            <div class="comp-value" id="comp-percentile">…</div>
                             <div class="comp-label">Percentile</div>
                         </div>
                         <div class="comp-item">
-                            <div class="comp-value" id="comp-vs-avg">—</div>
+                            <div class="comp-value" id="comp-vs-avg">…</div>
                             <div class="comp-label">vs Average</div>
                         </div>
                         <div class="comp-item">
-                            <div class="comp-value" id="comp-vs-median">—</div>
+                            <div class="comp-value" id="comp-vs-median">…</div>
                             <div class="comp-label">vs Median</div>
                         </div>
                         <div class="comp-item">
-                            <div class="comp-value" id="comp-zscore">—</div>
+                            <div class="comp-value" id="comp-zscore">…</div>
                             <div class="comp-label">Z-Score</div>
                         </div>
                     </div>
@@ -299,7 +299,7 @@ function showFormErrors(payload) {
             return `<li>${msg}</li>`;
         }).join('')
         : `<li>${escapeHtml(String((payload && payload.error) || 'Something went wrong.'))}</li>`;
-    el.innerHTML = `<div class="form-error-title">Almost there</div><p class="form-error-sub">A quick note before we calculate:</p><ul class="form-error-list">${lines}</ul>`;
+    el.innerHTML = `<div class="form-error-title">Almost there</div><ul class="form-error-list">${lines}</ul>`;
     el.classList.remove('hidden');
     document.getElementById('results').classList.add('hidden');
     el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -397,15 +397,15 @@ function addRequirement() {
                 <div class="requirement-comp-stats">
                     <div class="requirement-comp-field">
                         <label class="requirement-comp-field-label" for="req-comp-avg-${requirementCount}">Class avg</label>
-                        <input id="req-comp-avg-${requirementCount}" type="number" class="requirement-comp-avg" min="0" max="100" step="0.1" placeholder="—">
+                        <input id="req-comp-avg-${requirementCount}" type="number" class="requirement-comp-avg" min="0" max="100" step="0.1">
                     </div>
                     <div class="requirement-comp-field">
                         <label class="requirement-comp-field-label" for="req-comp-sd-${requirementCount}">Std dev</label>
-                        <input id="req-comp-sd-${requirementCount}" type="number" class="requirement-comp-sd" min="0" max="50" step="0.1" placeholder="—">
+                        <input id="req-comp-sd-${requirementCount}" type="number" class="requirement-comp-sd" min="0" max="50" step="0.1">
                     </div>
                     <div class="requirement-comp-field">
                         <label class="requirement-comp-field-label" for="req-comp-med-${requirementCount}">Median</label>
-                        <input id="req-comp-med-${requirementCount}" type="number" class="requirement-comp-median" min="0" max="100" step="0.1" placeholder="—">
+                        <input id="req-comp-med-${requirementCount}" type="number" class="requirement-comp-median" min="0" max="100" step="0.1">
                     </div>
                 </div>
             </div>
@@ -730,7 +730,7 @@ async function submitPrediction() {
             const data = computePredictionLocally(payload);
             if (!data.ok) {
                 showFormErrors(data);
-                setRequestStatus('Almost there — add one graded item above to continue.', 'warn');
+                setRequestStatus('Almost there. Add a graded item above to continue.', 'warn');
                 return;
             }
             clearFormErrors();
@@ -1076,11 +1076,11 @@ function generateTips(study, attend, assign, data, requirementWeightSum) {
 
     if (attend < 70) tips.push({ icon:'🏫', title:'Attendance is Critical', text:`At ${attend}%, you're missing too much. Aim for 85%+.` });
     else if (attend < 85) tips.push({ icon:'🏫', title:'Improve Attendance', text:`${attend}% is okay but students with 90%+ score 15–20% higher.` });
-    else tips.push({ icon:'🏫', title:'Great Attendance!', text:`${attend}% — showing up consistently!` });
+    else tips.push({ icon:'🏫', title:'Great Attendance!', text:`${attend}%: showing up consistently.` });
 
     if (assign < 70) tips.push({ icon:'📝', title:'Focus on Assignments', text:`Score of ${assign} is below average. Start early, visit office hours.` });
     else if (assign < 85) tips.push({ icon:'📝', title:'Boost Assignment Quality', text:`${assign} is good but there's room. Double-check before submitting.` });
-    else tips.push({ icon:'📝', title:'Excellent Assignments!', text:`${assign} — outstanding! Consider helping peers to reinforce learning.` });
+    else tips.push({ icon:'📝', title:'Excellent Assignments!', text:`${assign}: strong work. Teaching others helps you lock it in.` });
 
     if (data.diff_from_avg !== undefined) {
         if (data.diff_from_avg > 5) tips.push({ icon:'📈', title:'Above Class Average', text:`You're ${data.diff_from_avg} points above average. Strong position!` });
