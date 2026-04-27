@@ -57,7 +57,7 @@
                     <input type="number" id="score-default-total" min="1" step="0.1" value="100" placeholder="e.g. 10 or 100">
                 </div>
                 <div id="requirements-list"></div>
-                <p class="section-desc" id="requirements-hint">Enter only numbers based on your selected base. If base is 10, enter scores from 0-10. If base is 100, enter scores from 0-100. In Curve mode, optional <strong>class avg / SD / median</strong> per row refine the percentile (leave blank on a row if you do not have stats for that item).</p>
+                <p class="section-desc" id="requirements-hint">Enter only numbers based on your selected base. If base is 10, enter scores from 0-10. If base is 100, enter scores from 0-100. In Curve mode, expand <strong>Class stats (optional)</strong> on a row to enter class avg / SD / median for that component.</p>
             </div>
 
             <div class="card">
@@ -354,6 +354,19 @@ function updateCurveRemainder() {
     document.getElementById('pct-warning').classList.toggle('hidden', remainder >= 0);
 }
 
+function toggleRequirementCompStats(id) {
+    const row = document.getElementById(`requirement-${id}`);
+    if (!row) return;
+    const panel = row.querySelector('.requirement-comp-stats-panel');
+    const btn = row.querySelector('.toggle-comp-stats-btn');
+    if (!panel || !btn) return;
+    panel.classList.toggle('hidden');
+    const isOpen = !panel.classList.contains('hidden');
+    btn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    const chev = btn.querySelector('.req-stats-chevron');
+    if (chev) chev.textContent = isOpen ? '▴' : '▾';
+}
+
 function addRequirement() {
     requirementCount++;
     const div = document.createElement('div');
@@ -369,11 +382,16 @@ function addRequirement() {
             <span>Extra</span>
         </label>
         <button class="factor-remove" onclick="removeRequirement(${requirementCount})">×</button>
-        <div class="requirement-comp-stats">
-            <span class="requirement-comp-label">Class stats <span class="hint">(optional)</span></span>
-            <input type="number" class="requirement-comp-avg" min="0" max="100" step="0.1" placeholder="Avg" title="Class average for this component (Curve mode)">
-            <input type="number" class="requirement-comp-sd" min="0" max="50" step="0.1" placeholder="SD" title="Std dev for this component (Curve mode)">
-            <input type="number" class="requirement-comp-median" min="0" max="100" step="0.1" placeholder="Median" title="Median for this component (Curve mode)">
+        <button type="button" class="toggle-comp-stats-btn" onclick="toggleRequirementCompStats(${requirementCount})" aria-expanded="false" aria-controls="requirement-comp-panel-${requirementCount}">
+            Class stats <span class="hint">(optional)</span> <span class="req-stats-chevron" aria-hidden="true">▾</span>
+        </button>
+        <div id="requirement-comp-panel-${requirementCount}" class="requirement-comp-stats-panel hidden" role="region" aria-label="Class statistics for curve mode">
+            <div class="requirement-comp-stats">
+                <span class="requirement-comp-label">Avg · SD · Median</span>
+                <input type="number" class="requirement-comp-avg" min="0" max="100" step="0.1" placeholder="Avg" title="Class average for this component (Curve mode)">
+                <input type="number" class="requirement-comp-sd" min="0" max="50" step="0.1" placeholder="SD" title="Std dev for this component (Curve mode)">
+                <input type="number" class="requirement-comp-median" min="0" max="100" step="0.1" placeholder="Median" title="Median for this component (Curve mode)">
+            </div>
         </div>
         <div class="requirement-preview" id="requirement-preview-${requirementCount}"></div>
     `;
