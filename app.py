@@ -140,6 +140,8 @@ def _validate_predict(data):
 
     curve_pct_a = curve_pct_b = curve_pct_c = None
     curve_class_avg = curve_class_sd = curve_class_median = None
+    curve_component_stats = {}
+    curve_use_component_stats = False
     th_a = th_b = th_c = th_d = None
     custom_scale = []
     opt_class_avg = opt_class_sd = opt_class_median = None
@@ -159,6 +161,36 @@ def _validate_predict(data):
         curve_class_median = _num_field(
             data, 'class_median', errors, label='Class median', lo=0, hi=100, default=75
         )
+        raw_ccs = data.get('curve_component_stats')
+        if raw_ccs is not None:
+            if not isinstance(raw_ccs, dict):
+                errors.append({
+                    'field': 'curve_component_stats',
+                    'message': 'curve_component_stats must be a JSON object.',
+                })
+            else:
+                for raw_name, stats in raw_ccs.items():
+                    if not isinstance(stats, dict):
+                        continue
+                    nk = str(raw_name).strip().lower()
+                    if not nk:
+                        continue
+                    try:
+                        ca = float(stats['class_avg'])
+                        cs = float(stats['class_sd'])
+                        cm = float(stats['class_median'])
+                    except (KeyError, TypeError, ValueError):
+                        continue
+                    if math.isnan(ca) or math.isnan(cs) or math.isnan(cm):
+                        continue
+                    if cs < 0 or ca < 0 or ca > 100 or cm < 0 or cm > 100:
+                        continue
+                    curve_component_stats[nk] = {
+                        'class_avg': ca,
+                        'class_sd': cs,
+                        'class_median': cm,
+                    }
+        curve_use_component_stats = len(curve_component_stats) > 0
         if curve_pct_a is not None and curve_pct_b is not None and curve_pct_c is not None:
             if curve_pct_a + curve_pct_b + curve_pct_c > 100.01:
                 errors.append({
@@ -279,6 +311,8 @@ def _validate_predict(data):
             'class_avg': curve_class_avg,
             'class_sd': curve_class_sd,
             'class_median': curve_class_median,
+            'curve_component_stats': curve_component_stats,
+            'curve_use_component_stats': curve_use_component_stats,
         })
     elif grading_mode == 'custom_score':
         parsed.update({
@@ -369,6 +403,32 @@ def predict():
         class_avg = p['class_avg']
         class_sd = p['class_sd']
         class_median = p['class_median']
+
+        ccs = p.get('curve_component_stats') or {}
+        if p.get('curve_use_component_stats') and requirements and ccs:
+            total_weight = 0.0
+            avg_weighted = 0.0
+            median_weighted = 0.0
+            variance_weighted = 0.0
+            for r in requirements:
+                key = str(r.get('name', '')).strip().lower()
+                w = float(r.get('weight', 0))
+                if not key or w <= 0:
+                    continue
+                item = ccs.get(key)
+                if not item:
+                    continue
+                a = float(item['class_avg'])
+                s = float(item['class_sd'])
+                m = float(item['class_median'])
+                total_weight += w
+                avg_weighted += a * w
+                median_weighted += m * w
+                variance_weighted += (s * s) * w
+            if total_weight > 0:
+                class_avg = avg_weighted / total_weight
+                class_median = median_weighted / total_weight
+                class_sd = math.sqrt(max(variance_weighted / total_weight, 0.0))
 
         pct_a = p['pct_a']
         pct_b = p['pct_b']
