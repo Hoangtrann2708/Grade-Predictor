@@ -139,7 +139,7 @@ def _validate_predict(data):
     if not parsed_requirements:
         errors.append({
             'field': 'requirements',
-            'message': 'Add at least one requirement with a score and a positive weight.',
+            'message': 'Add at least one graded item with a score and a positive weight (use + Add Requirement in the app).',
         })
 
     curve_pct_a = curve_pct_b = curve_pct_c = None
