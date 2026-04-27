@@ -1,6 +1,6 @@
-# Grade Predictor
+# Course Grade Predictor
 
-Grade Predictor is a Flask + ML web app that helps students estimate their final performance using:
+Course Grade Predictor is a Flask + ML web app that helps students estimate their final performance using:
 
 - weighted course components (including extra credit),
 - custom score thresholds (A/B/C/D with optional A-, B+, etc.),
@@ -10,11 +10,15 @@ It is built as a practical student tool, not just a model demo.
 
 ## Demo
 
-- **Live Demo:** [https://grade-predictor-1-zjns.onrender.com](https://grade-predictor-1-zjns.onrender.com)
-- **Local Demo (for instant presentation):** [http://127.0.0.1:5000](http://127.0.0.1:5000)
+- **Instant live demo (Vercel — use this first, including new branches / PR previews):**  
+  [https://grade-predictor-nine.vercel.app](https://grade-predictor-nine.vercel.app)
+- **Local:** [http://127.0.0.1:5000](http://127.0.0.1:5000)
+- **Full Flask API on Render (optional — free tier may cold-start ~30–60s after idle):**  
+  [https://grade-predictor-1-zjns.onrender.com](https://grade-predictor-1-zjns.onrender.com)
 
-Recruiter note: This project is hosted on Render free tier.  
-The first request after inactivity may take ~30-60 seconds (cold start), then performance is normal.
+**After you push a branch:** open the **Vercel** preview or production URL for a fast UI load. Prefer that over the Render link for demos and recruiter screens.
+
+Recruiter note: Share the **Vercel** link for an instant first paint; mention Render only if you need to show the hosted Python API waking up.
 
 ## Why This Project
 
@@ -50,7 +54,7 @@ This app normalizes these inputs, applies the selected grading logic, and provid
 - **ML:** scikit-learn, NumPy, SciPy, pandas
 - **Frontend:** HTML, CSS, JavaScript
 - **Production server:** Gunicorn
-- **Deployment:** Render / Railway
+- **Deployment:** Vercel (frontend / instant UI), Render / Railway (Flask API)
 
 ## Local Setup
 
@@ -82,6 +86,10 @@ Open `http://127.0.0.1:5000`
 - `POST /predict` - prediction and grading response
 
 ## Deployment
+
+### Vercel (recommended for demos)
+
+Connect the GitHub repo so **Production** uses your main branch and **Preview** deploys each branch / PR. Use those URLs when you want an instant-opening UI (especially after pushing a new branch).
 
 ### Render
 
