@@ -151,7 +151,7 @@
                 <div class="sub-label" style="margin-top: 20px;">Whole-class statistics</div>
                 <div class="stat-callout">
                     <p class="stat-callout-title">Use after the instructor publishes class-wide results</p>
-                    <p class="stat-callout-body">Enter the <strong>overall class</strong> average, standard deviation, and median once grading is done and the syllabus or LMS shows summary stats for everyone — not your personal grade.</p>
+                    <p class="stat-callout-body">Enter the <strong>overall class</strong> average, standard deviation, and median once grading is done and the syllabus or LMS shows summary stats for everyone — not your personal grade. If you enter per-item class stats under each requirement (Curve mode), those take priority; leave whole-class fields as a fallback.</p>
                 </div>
                 <div class="stats-grid stats-grid-tight">
                     <div class="input-group">
@@ -312,6 +312,15 @@ function setMode(mode) {
     document.getElementById('section-curve').classList.toggle('hidden', mode !== 'curve');
     updateCurveRemainder();
     toggleLetterGrades();
+    updateRequirementCurveStatsVisibility();
+}
+
+/** Per-row class stats are curve-only; hidden in custom score mode to reduce clutter. */
+function updateRequirementCurveStatsVisibility() {
+    const show = currentMode === 'curve';
+    document.querySelectorAll('.requirement-comp-stats-section').forEach(el => {
+        el.classList.toggle('hidden', !show);
+    });
 }
 
 function toggleLetterGrades() {
@@ -340,6 +349,19 @@ function updateCurveRemainder() {
     document.getElementById('pct-warning').classList.toggle('hidden', remainder >= 0);
 }
 
+function toggleRequirementCompStats(id) {
+    const row = document.getElementById(`requirement-${id}`);
+    if (!row) return;
+    const panel = row.querySelector('.requirement-comp-stats-panel');
+    const btn = row.querySelector('.toggle-comp-stats-btn');
+    if (!panel || !btn) return;
+    panel.classList.toggle('hidden');
+    const isOpen = !panel.classList.contains('hidden');
+    btn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    const chev = btn.querySelector('.req-stats-chevron');
+    if (chev) chev.textContent = isOpen ? '▴' : '▾';
+}
+
 function addRequirement() {
     requirementCount++;
     const div = document.createElement('div');
@@ -358,9 +380,33 @@ function addRequirement() {
             <button type="button" class="factor-remove" onclick="removeRequirement(${requirementCount})" title="Remove row" aria-label="Remove requirement">×</button>
         </div>
         <div class="requirement-preview" id="requirement-preview-${requirementCount}"></div>
+        <div class="requirement-comp-stats-section hidden">
+            <button type="button" class="toggle-comp-stats-btn" onclick="toggleRequirementCompStats(${requirementCount})" aria-expanded="false" aria-controls="requirement-comp-panel-${requirementCount}">
+                <span class="toggle-comp-stats-text"><span class="toggle-comp-stats-summary">Class stats for this item</span><span class="hint"> · optional · curve only</span></span>
+                <span class="req-stats-chevron" aria-hidden="true">▾</span>
+            </button>
+            <div id="requirement-comp-panel-${requirementCount}" class="requirement-comp-stats-panel hidden" role="region" aria-label="Class distribution for this assignment">
+                <p class="requirement-comp-intro">If your professor shared <strong>class-wide</strong> stats for this assignment only (after grades were released), enter them here.</p>
+                <div class="requirement-comp-stats">
+                    <div class="requirement-comp-field">
+                        <label class="requirement-comp-field-label" for="req-comp-avg-${requirementCount}">Class avg</label>
+                        <input id="req-comp-avg-${requirementCount}" type="number" class="requirement-comp-avg" min="0" max="100" step="0.1" placeholder="—">
+                    </div>
+                    <div class="requirement-comp-field">
+                        <label class="requirement-comp-field-label" for="req-comp-sd-${requirementCount}">Std dev</label>
+                        <input id="req-comp-sd-${requirementCount}" type="number" class="requirement-comp-sd" min="0" max="50" step="0.1" placeholder="—">
+                    </div>
+                    <div class="requirement-comp-field">
+                        <label class="requirement-comp-field-label" for="req-comp-med-${requirementCount}">Median</label>
+                        <input id="req-comp-med-${requirementCount}" type="number" class="requirement-comp-median" min="0" max="100" step="0.1" placeholder="—">
+                    </div>
+                </div>
+            </div>
+        </div>
     `;
     document.getElementById('requirements-list').appendChild(div);
     document.getElementById('requirements-hint').style.display = 'none';
+    updateRequirementCurveStatsVisibility();
 }
 
 function getScorePlaceholder(defaultTotal) {
@@ -513,6 +559,22 @@ function removeGradeVariant(label) {
     if (el) el.remove();
 }
 
+/** Curve mode: stats keyed by requirement name (lowercase). Rows need all three fields filled. */
+function getCurveComponentStatsFromRequirementRows() {
+    const byName = {};
+    document.querySelectorAll('.requirement-row').forEach(row => {
+        const name = (row.querySelector('.requirement-name')?.value || '').trim();
+        if (!name) return;
+        const avg = parseFloat(row.querySelector('.requirement-comp-avg')?.value);
+        const sd = parseFloat(row.querySelector('.requirement-comp-sd')?.value);
+        const median = parseFloat(row.querySelector('.requirement-comp-median')?.value);
+        if (!isNaN(avg) && !isNaN(sd) && !isNaN(median) && sd >= 0) {
+            byName[name.toLowerCase()] = { class_avg: avg, class_sd: sd, class_median: median };
+        }
+    });
+    return byName;
+}
+
 async function submitPrediction() {
     clearFormErrors();
     clearRequestStatus();
@@ -611,6 +673,8 @@ async function submitPrediction() {
         payload.class_avg    = parseFloat(document.getElementById('class_avg').value) || 75;
         payload.class_sd     = parseFloat(document.getElementById('class_sd').value) || 10;
         payload.class_median = parseFloat(document.getElementById('class_median').value) || 75;
+        payload.curve_component_stats = getCurveComponentStatsFromRequirementRows();
+        payload.curve_use_component_stats = Object.keys(payload.curve_component_stats || {}).length > 0;
         const sum = payload.pct_a + payload.pct_b + payload.pct_c;
         if (sum > 100.01) {
             showFormErrors({
@@ -714,6 +778,33 @@ function computePredictionLocally(payload) {
         const pctA = Number(payload.pct_a || 30);
         const pctB = Number(payload.pct_b || 40);
         const pctC = Number(payload.pct_c || 20);
+        if (payload.curve_use_component_stats && Array.isArray(requirements) && requirements.length > 0) {
+            const statsByName = payload.curve_component_stats || {};
+            let totalWeight = 0;
+            let avgWeighted = 0;
+            let medianWeighted = 0;
+            let varianceWeighted = 0;
+            requirements.forEach(r => {
+                const key = String(r.name || '').trim().toLowerCase();
+                const w = Number(r.weight || 0);
+                if (!key || w <= 0) return;
+                const item = statsByName[key];
+                if (!item) return;
+                const a = Number(item.class_avg);
+                const s = Number(item.class_sd);
+                const m = Number(item.class_median);
+                if (isNaN(a) || isNaN(s) || isNaN(m) || s < 0) return;
+                totalWeight += w;
+                avgWeighted += a * w;
+                medianWeighted += m * w;
+                varianceWeighted += (s * s) * w;
+            });
+            if (totalWeight > 0) {
+                classAvg = avgWeighted / totalWeight;
+                classMedian = medianWeighted / totalWeight;
+                classSd = Math.sqrt(Math.max(varianceWeighted / totalWeight, 0));
+            }
+        }
         const zScore = classSd > 0 ? (predictionPercent - classAvg) / classSd : 0;
         const percentile = Number((normalCdf(zScore) * 100).toFixed(1));
         const cutoffA = 100 - pctA;
@@ -978,6 +1069,7 @@ async function warmupServerHealth() {
 
 warmupServerHealth();
 toggleLetterGrades();
+updateRequirementCurveStatsVisibility();
 document.getElementById('score-default-total').addEventListener('input', refreshScorePlaceholdersAndPreviews);
 </script>
 
