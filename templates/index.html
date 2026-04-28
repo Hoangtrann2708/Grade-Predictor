@@ -42,17 +42,6 @@
         </div>
     </div>
 
-    <div class="card how-it-works-card">
-        <button type="button" class="how-it-works-toggle" id="how-it-works-btn" onclick="toggleHowItWorks()" aria-expanded="false">
-            How this predictor works ▾
-        </button>
-        <div id="how-it-works-body" class="how-it-works-body hidden">
-            <p><strong>Course grade (what matters):</strong> Built from your <strong>weighted requirements</strong> (homework, midterms, etc.). Names like &ldquo;Midterm 1&rdquo; / &ldquo;HW&rdquo; map into component slots. That weighted total is your syllabus-style score (0–100).</p>
-            <p><strong>Letters:</strong> <strong>Custom Score</strong> compares that total to your A/B/C/D thresholds. <strong>Curve</strong> compares it to class statistics using percentiles. Different classes → different inputs and rules; your mode choice matches how that class is graded.</p>
-            <p><strong>ML row (when the API loads model files):</strong> An extra numeric estimate from <code>model/train_model.py</code> trained on synthetic multi-component data — useful as a demo, not a substitute for your syllabus math when weights are known.</p>
-        </div>
-    </div>
-
     <!-- ═══════════ TWO COLUMN LAYOUT ═══════════ -->
     <div class="grid-2">
 
@@ -180,9 +169,9 @@
     <div id="results" class="hidden">
         <div class="results-grid">
             <div class="result-card" id="result-grade-card">
-                <div class="result-emoji" id="result-emoji">🌟</div>
-                <div class="result-grade" id="result-grade">A</div>
-                <div class="result-message" id="result-message">Excellent!</div>
+                <div class="result-emoji" id="result-emoji">📊</div>
+                <div class="result-grade" id="result-grade">0</div>
+                <div class="result-message" id="result-message">Predicted final score (0-100)</div>
                 <p class="result-detail-note hidden" id="result-ml-note"></p>
                 <p class="result-detail-note result-detail-muted hidden" id="result-source-note"></p>
                 <div class="result-score-ring">
@@ -204,6 +193,13 @@
             </div>
 
             <div>
+                <div class="card" id="result-grade-evaluation" style="margin-bottom:16px">
+                    <div class="section-label"><span class="dot dot-green"></span> Grade Outcome (Threshold / Curve)</div>
+                    <div class="outcome-grade" id="outcome-grade-letter">A</div>
+                    <div class="outcome-mode" id="outcome-mode-label">Mode: Custom Score</div>
+                    <div class="outcome-message" id="outcome-message">Excellent!</div>
+                </div>
+
                 <div class="card hidden no-mb" id="result-comparison" style="margin-bottom:16px">
                     <div class="section-label"><span class="dot dot-blue"></span> Class Comparison</div>
                     <div class="comparison-grid">
@@ -297,14 +293,6 @@ function showFormErrors(payload) {
     el.classList.remove('hidden');
     document.getElementById('results').classList.add('hidden');
     el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-}
-
-function toggleHowItWorks() {
-    const body = document.getElementById('how-it-works-body');
-    const btn = document.getElementById('how-it-works-btn');
-    const open = body.classList.toggle('hidden');
-    btn.setAttribute('aria-expanded', open ? 'false' : 'true');
-    btn.textContent = open ? 'How this predictor works ▾' : 'How this predictor works ▴';
 }
 
 function escapeHtml(s) {
@@ -935,14 +923,19 @@ function displayResults(data, study, attend, assign, requirementWeightSum) {
     const gradeEmojis = { A: '🌟', B: '💪', C: '⚡', D: '⚠️', F: '❌' };
     const useLetters = data.use_letter_grades !== false;
     const color = useLetters ? (gradeColors[data.grade_letter] || '#6366f1') : '#14b8a6';
-    const emoji = useLetters ? (gradeEmojis[data.grade_letter] || '📊') : '📊';
+    const emoji = '📊';
     const shownScore = data.prediction_display ?? data.prediction;
     const percentScore = data.prediction_percent ?? data.prediction;
 
     document.getElementById('result-emoji').textContent = emoji;
-    document.getElementById('result-grade').textContent = useLetters ? data.grade_letter : `${shownScore}`;
-    document.getElementById('result-grade').style.color = color;
-    document.getElementById('result-message').textContent = useLetters ? data.message : `Score out of ${data.score_scale_base || 100}`;
+    document.getElementById('result-grade').textContent = `${shownScore}`;
+    document.getElementById('result-grade').style.color = '#e2e8f0';
+    document.getElementById('result-message').textContent = 'Predicted final score (0-100)';
+    document.getElementById('outcome-grade-letter').textContent = useLetters ? data.grade_letter : 'N/A';
+    document.getElementById('outcome-grade-letter').style.color = useLetters ? color : '#94a3b8';
+    document.getElementById('outcome-mode-label').textContent =
+        `Mode: ${data.grading_mode === 'curve' ? 'Curve / Percentile' : 'Custom Thresholds'}`;
+    document.getElementById('outcome-message').textContent = data.message || '';
     const mlNote = document.getElementById('result-ml-note');
     const srcNote = document.getElementById('result-source-note');
     if (data.ml_ran && data.ml_prediction_percent != null) {

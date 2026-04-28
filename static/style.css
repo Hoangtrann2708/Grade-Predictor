@@ -718,6 +718,29 @@ input:disabled { opacity: .4; cursor: not-allowed; }
 }
 .needed-for-a strong { color: #6366f1; }
 
+/* ── Outcome summary (grade mapping separate from final score) ── */
+.outcome-grade {
+    font-family: 'Space Mono', monospace;
+    font-size: 46px;
+    font-weight: 700;
+    line-height: 1.1;
+    margin-top: 8px;
+}
+.outcome-mode {
+    margin-top: 8px;
+    font-size: 12px;
+    color: rgba(255,255,255,.45);
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    font-weight: 700;
+}
+.outcome-message {
+    margin-top: 8px;
+    font-size: 14px;
+    color: rgba(255,255,255,.68);
+    font-weight: 500;
+}
+
 /* ── Comparison ── */
 .comparison-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; text-align: center; }
 .comp-item {
