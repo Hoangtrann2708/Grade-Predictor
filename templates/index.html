@@ -55,8 +55,16 @@
         <div>
             <div class="card">
                 <div class="section-label-row">
-                    <div><span class="dot dot-blue"></span> <span class="section-label-text">Input Requirements</span></div>
-                    <button class="add-btn" onclick="addRequirement()">+ Add Requirement</button>
+                    <div><span class="dot dot-blue"></span> <span class="section-label-text" id="requirements-section-label">Input Requirements</span></div>
+                    <button id="add-requirement-btn" class="add-btn" onclick="addRequirement()">+ Add Requirement</button>
+                </div>
+                <div id="performance-presets" class="component-presets hidden">
+                    <button type="button" class="preset-btn" onclick="addRequirementPreset('homework_avg')">Homework</button>
+                    <button type="button" class="preset-btn" onclick="addRequirementPreset('midterm_1')">Midterm 1</button>
+                    <button type="button" class="preset-btn" onclick="addRequirementPreset('midterm_2')">Midterm 2</button>
+                    <button type="button" class="preset-btn" onclick="addRequirementPreset('quiz_avg')">Quiz Avg</button>
+                    <button type="button" class="preset-btn" onclick="addRequirementPreset('project')">Project</button>
+                    <button type="button" class="preset-btn" onclick="addRequirementPreset('attendance_pct')">Attendance</button>
                 </div>
                 <div id="requirements-list"></div>
                 <p class="section-desc" id="requirements-hint"><strong>Your scores:</strong> name, points, weight per row. Use 0–100, a fraction (e.g. 17/20), or a %. <strong>Class stats for this item:</strong> Curve mode only.</p>
@@ -251,6 +259,14 @@
 let currentMode = 'custom_score';
 let requirementCount = 0;
 const gradeVariants = new Set();
+const REQUIREMENT_PRESETS = {
+    homework_avg: { name: 'Homework', weight: 20 },
+    midterm_1: { name: 'Midterm 1', weight: 20 },
+    midterm_2: { name: 'Midterm 2', weight: 20 },
+    quiz_avg: { name: 'Quiz Avg', weight: 10 },
+    project: { name: 'Project', weight: 20 },
+    attendance_pct: { name: 'Attendance', weight: 10 },
+};
 // Experimental: compute predictions in browser to avoid backend wait.
 /** Try Flask /predict first (ML + full response); fall back to browser syllabus math on static hosts. */
 const PREFER_BACKEND_PREDICT = true;
@@ -305,6 +321,26 @@ function escapeHtml(s) {
     const d = document.createElement('div');
     d.textContent = s;
     return d.innerHTML;
+}
+
+function updatePredictionEngineUI() {
+    const engine = document.getElementById('prediction-engine')?.value || 'syllabus';
+    const isForecast = engine === 'performance_ml';
+    const presets = document.getElementById('performance-presets');
+    const hint = document.getElementById('requirements-hint');
+    const label = document.getElementById('requirements-section-label');
+    const addBtn = document.getElementById('add-requirement-btn');
+
+    if (presets) presets.classList.toggle('hidden', !isForecast);
+    if (hint) hint.classList.toggle('hidden', isForecast);
+    if (label) label.textContent = isForecast ? 'Performance Inputs' : 'Input Requirements';
+    if (addBtn) addBtn.textContent = isForecast ? '+ Add Component' : '+ Add Requirement';
+
+    if (isForecast && document.getElementById('requirements-list').children.length === 0) {
+        addRequirementPreset('homework_avg');
+        addRequirementPreset('midterm_1');
+        addRequirementPreset('midterm_2');
+    }
 }
 
 function setMode(mode) {
@@ -365,17 +401,28 @@ function toggleRequirementCompStats(id) {
     if (chev) chev.textContent = isOpen ? '▴' : '▾';
 }
 
-function addRequirement() {
+function addRequirementPreset(key) {
+    const preset = REQUIREMENT_PRESETS[key];
+    if (!preset) return;
+    const rows = [...document.querySelectorAll('.requirement-row .requirement-name')];
+    const exists = rows.some(el => (el.value || '').trim().toLowerCase() === preset.name.toLowerCase());
+    if (exists) return;
+    addRequirement(preset);
+}
+
+function addRequirement(preset = null) {
     requirementCount++;
     const div = document.createElement('div');
     div.className = 'requirement-row';
     div.id = `requirement-${requirementCount}`;
     const scorePlaceholder = getScorePlaceholder(getDefaultScoreTotal());
+    const presetName = preset && preset.name ? escapeHtml(String(preset.name)) : '';
+    const presetWeight = preset && !isNaN(Number(preset.weight)) ? String(Number(preset.weight)) : '';
     div.innerHTML = `
         <div class="requirement-main">
-            <input type="text" placeholder="Item name (e.g. Midterm 1)" class="requirement-name" aria-label="Requirement name">
+            <input type="text" placeholder="Item name (e.g. Midterm 1)" class="requirement-name" aria-label="Requirement name" value="${presetName}">
             <input type="text" placeholder="${scorePlaceholder}" class="requirement-score" aria-label="Your score" oninput="updateRequirementPreview(${requirementCount})" onblur="normalizeRequirementScore(${requirementCount})">
-            <input type="number" placeholder="Weight %" min="0" max="100" step="0.1" class="requirement-weight" aria-label="Weight percent">
+            <input type="number" placeholder="Weight %" min="0" max="100" step="0.1" class="requirement-weight" aria-label="Weight percent" value="${presetWeight}">
             <label class="extra-credit-check">
                 <input type="checkbox" class="requirement-extra">
                 <span>Extra</span>
@@ -1096,6 +1143,8 @@ async function warmupServerHealth() {
 warmupServerHealth();
 toggleLetterGrades();
 updateRequirementCurveStatsVisibility();
+document.getElementById('prediction-engine').addEventListener('change', updatePredictionEngineUI);
+updatePredictionEngineUI();
 </script>
 
 </body>
