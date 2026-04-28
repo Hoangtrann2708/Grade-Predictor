@@ -1,0 +1,31 @@
+{
+  "feature_columns": [
+    "score_homework_avg",
+    "score_midterm_1",
+    "score_midterm_2",
+    "score_final_exam",
+    "score_project",
+    "score_quiz_avg",
+    "score_attendance_pct",
+    "uses_homework_avg",
+    "uses_midterm_1",
+    "uses_midterm_2",
+    "uses_final_exam",
+    "uses_project",
+    "uses_quiz_avg",
+    "uses_attendance_pct"
+  ],
+  "components": [
+    "homework_avg",
+    "midterm_1",
+    "midterm_2",
+    "final_exam",
+    "project",
+    "quiz_avg",
+    "attendance_pct"
+  ],
+  "description": "Masked component scores + binary syllabus masks. Training labels are weighted sums with per-row random syllabi.",
+  "best_model": "Gradient Boosting",
+  "best_r2_holdout": 0.722556,
+  "note": "When real syllabus weights and all scores are known, compute final with weighted sum in the app; use this ML only if you ingest matching features from the client or imputation workflows."
+}
