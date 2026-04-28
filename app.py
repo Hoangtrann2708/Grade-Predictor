@@ -1,10 +1,139 @@
 from flask import Flask, render_template, request, jsonify
+import json
 import math
+import os
+import pickle
 import time
+
+import numpy as np
 from scipy import stats
 
 app = Flask(__name__)
 APP_STARTED_AT = int(time.time())
+
+# Optional ML bundle (train with `python model/train_model.py`). Same dir layout as ml_meta.json.
+_MODEL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'model')
+_ML_MODEL = None
+_ML_SCALER = None
+_ML_COMPONENTS = None
+
+
+def _load_ml_bundle():
+    """Load grade_model.pkl + scaler.pkl + ml_meta.json if present."""
+    global _ML_MODEL, _ML_SCALER, _ML_COMPONENTS
+    if _ML_MODEL is not None:
+        return
+    meta_path = os.path.join(_MODEL_DIR, 'ml_meta.json')
+    model_path = os.path.join(_MODEL_DIR, 'grade_model.pkl')
+    scaler_path = os.path.join(_MODEL_DIR, 'scaler.pkl')
+    try:
+        if not all(os.path.isfile(p) for p in (meta_path, model_path, scaler_path)):
+            return
+        with open(meta_path, encoding='utf-8') as f:
+            meta = json.load(f)
+        _ML_COMPONENTS = meta.get('components') or []
+        with open(model_path, 'rb') as f:
+            _ML_MODEL = pickle.load(f)
+        with open(scaler_path, 'rb') as f:
+            _ML_SCALER = pickle.load(f)
+    except OSError:
+        _ML_MODEL = _ML_SCALER = None
+        _ML_COMPONENTS = None
+
+
+def _classify_requirement_name(name: str):
+    """Map a free-text requirement label to a fixed component key (see model/ml_meta.json)."""
+    n = (name or '').lower().strip()
+    if not n:
+        return None
+    if any(x in n for x in ('midterm 2', 'midterm2', 'mt 2', 'mt2', 'exam 2', 'exam2', 'test 2')):
+        return 'midterm_2'
+    if any(x in n for x in ('midterm 1', 'midterm1', 'mt 1', 'mt1', 'exam 1', 'exam1', 'test 1')):
+        return 'midterm_1'
+    if any(x in n for x in ('project', 'proj')):
+        return 'project'
+    if 'final' in n or n == 'final':
+        return 'final_exam'
+    if any(x in n for x in ('quiz', 'quizzes')):
+        return 'quiz_avg'
+    if any(x in n for x in ('attendance', 'attend', 'participation')):
+        return 'attendance_pct'
+    if any(x in n for x in ('homework', 'hw', 'assignment', 'assign')):
+        return 'homework_avg'
+    return None
+
+
+def _ml_feature_row(requirements):
+    """
+    Build a 1 x (2K) row matching train_model.py: [masked scores | mask bits].
+    Multiple rows mapping to the same component use a weight-weighted average of scores.
+    """
+    _load_ml_bundle()
+    if not _ML_COMPONENTS or _ML_MODEL is None or _ML_SCALER is None:
+        return None
+
+    sums = {k: 0.0 for k in _ML_COMPONENTS}
+    wtot = {k: 0.0 for k in _ML_COMPONENTS}
+
+    for r in requirements:
+        if r.get('is_extra_credit'):
+            continue
+        key = _classify_requirement_name(str(r.get('name', '')))
+        if key is None:
+            continue
+        try:
+            sc = float(r['score'])
+            wt = float(r['weight'])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if wt <= 0:
+            continue
+        sums[key] += sc * wt
+        wtot[key] += wt
+
+    scores = {}
+    uses = {}
+    for k in _ML_COMPONENTS:
+        if wtot[k] > 0:
+            uses[k] = 1.0
+            scores[k] = sums[k] / wtot[k]
+        else:
+            uses[k] = 0.0
+            scores[k] = 0.0
+
+    row = []
+    for k in _ML_COMPONENTS:
+        row.append(scores[k] * uses[k])
+    for k in _ML_COMPONENTS:
+        row.append(uses[k])
+
+    return np.array(row, dtype=np.float64).reshape(1, -1)
+
+
+def _ml_predict_percent(requirements):
+    """Returns (percent or None, success)."""
+    row = _ml_feature_row(requirements)
+    if row is None:
+        return None, False
+    try:
+        x = _ML_SCALER.transform(row)
+        v = float(_ML_MODEL.predict(x)[0])
+        v = max(0.0, min(100.0, v))
+        return round(v, 1), True
+    except Exception:
+        return None, False
+
+
+def _ml_response_fields(requirements):
+    ml_pct, ml_run = _ml_predict_percent(requirements)
+    return {
+        'ml_prediction_percent': ml_pct,
+        'ml_model_loaded': _ML_MODEL is not None and _ML_SCALER is not None,
+        'ml_ran': ml_run and ml_pct is not None,
+    }
+
+
+_load_ml_bundle()
 
 
 def _num_field(data, key, errors, *, label, lo, hi, default=None, required=False):
@@ -359,6 +488,7 @@ def predict():
 
     # Syllabus-style weighted score only (validated: at least one requirement).
     requirements = p.get('requirements', [])
+    ml_fields = _ml_response_fields(requirements)
     base_points = sum(
         (r['score'] * r['weight']) / 100.0
         for r in requirements
@@ -451,7 +581,7 @@ def predict():
         diff_from_avg = round(prediction - class_avg, 1)
         diff_from_median = round(prediction - class_median, 1)
 
-        return jsonify({
+        curve_body = {
             'ok': True,
             'prediction': prediction_display,
             'prediction_percent': prediction,
@@ -477,7 +607,9 @@ def predict():
             'pct_a': pct_a,
             'pct_b': pct_b,
             'pct_c': pct_c,
-        })
+        }
+        curve_body.update(ml_fields)
+        return jsonify(curve_body)
 
     # ── Custom score-based grading ──
     threshold_a = p['threshold_a']
@@ -546,6 +678,7 @@ def predict():
         'threshold_d': threshold_d,
         'custom_scale': custom_scale,
     }
+    response.update(ml_fields)
 
     if 'class_avg' in p:
         class_avg = p['class_avg']

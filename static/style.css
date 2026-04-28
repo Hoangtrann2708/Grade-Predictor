@@ -110,6 +110,62 @@ body {
 .dot-teal { background: #14b8a6; }
 .hint { color: rgba(255,255,255,.25); font-weight: 400; }
 
+/* ── How it works ── */
+.how-it-works-card {
+    margin-bottom: 24px;
+}
+.how-it-works-toggle {
+    width: 100%;
+    text-align: left;
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,.08);
+    background: rgba(255,255,255,.04);
+    color: rgba(255,255,255,.82);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+    transition: border-color .2s, background .2s;
+}
+.how-it-works-toggle:hover {
+    border-color: rgba(99,102,241,.35);
+    background: rgba(99,102,241,.07);
+}
+.how-it-works-body {
+    margin-top: 12px;
+    padding: 14px 16px;
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,.06);
+    background: rgba(0,0,0,.18);
+}
+.how-it-works-body p {
+    margin: 0 0 12px;
+    font-size: 13px;
+    line-height: 1.55;
+    color: rgba(255,255,255,.52);
+}
+.how-it-works-body p:last-child { margin-bottom: 0; }
+.how-it-works-body strong { color: rgba(255,255,255,.72); font-weight: 700; }
+.how-it-works-body code {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: rgba(167, 139, 250, .95);
+}
+.result-detail-note {
+    margin: 8px 16px 0;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.45;
+    color: rgba(167, 139, 250, 0.92);
+}
+.result-detail-muted {
+    font-weight: 500;
+    color: rgba(255,255,255,.38);
+}
+
 /* ── Inputs ── */
 .input-group { margin-bottom: 14px; }
 .input-group:last-child { margin-bottom: 0; }
