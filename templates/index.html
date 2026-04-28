@@ -42,6 +42,18 @@
         </div>
     </div>
 
+    <div class="card how-it-works-card">
+        <button type="button" class="how-it-works-toggle" id="how-it-works-btn" onclick="toggleHowItWorks()" aria-expanded="false">
+            How this predictor works ▾
+        </button>
+        <div id="how-it-works-body" class="how-it-works-body hidden">
+            <p><strong>Course grade (what matters):</strong> Built from your <strong>weighted requirements</strong> (homework, midterms, etc.). Names like &ldquo;Midterm 1&rdquo; / &ldquo;HW&rdquo; map into component slots. That weighted total is your syllabus-style score (0–100).</p>
+            <p><strong>Letters:</strong> <strong>Custom Score</strong> compares that total to your A/B/C/D thresholds. <strong>Curve</strong> compares it to class statistics using percentiles. Different classes → different inputs and rules; your mode choice matches how that class is graded.</p>
+            <p><strong>Optional Study / Sleep / Attendance:</strong> Only personalize <strong>tips</strong>. They do not change the syllabus total.</p>
+            <p><strong>ML row (when the API loads model files):</strong> An extra numeric estimate from <code>model/train_model.py</code> trained on synthetic multi-component data — useful as a demo, not a substitute for your syllabus math when weights are known.</p>
+        </div>
+    </div>
+
     <!-- ═══════════ TWO COLUMN LAYOUT ═══════════ -->
     <div class="grid-2">
 
@@ -185,6 +197,8 @@
                 <div class="result-emoji" id="result-emoji">🌟</div>
                 <div class="result-grade" id="result-grade">A</div>
                 <div class="result-message" id="result-message">Excellent!</div>
+                <p class="result-detail-note hidden" id="result-ml-note"></p>
+                <p class="result-detail-note result-detail-muted hidden" id="result-source-note"></p>
                 <div class="result-score-ring">
                     <svg width="160" height="160">
                         <circle cx="80" cy="80" r="68" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="8"/>
@@ -257,7 +271,8 @@ const FACTOR_DEFS = {
 };
 const gradeVariants = new Set();
 // Experimental: compute predictions in browser to avoid backend wait.
-const INSTANT_NO_SERVER_MODE = true;
+/** Try Flask /predict first (ML + full response); fall back to browser syllabus math on static hosts. */
+const PREFER_BACKEND_PREDICT = true;
 
 function setRequestStatus(message, type = 'info') {
     const el = document.getElementById('request-status');
@@ -303,6 +318,14 @@ function showFormErrors(payload) {
     el.classList.remove('hidden');
     document.getElementById('results').classList.add('hidden');
     el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function toggleHowItWorks() {
+    const body = document.getElementById('how-it-works-body');
+    const btn = document.getElementById('how-it-works-btn');
+    const open = body.classList.toggle('hidden');
+    btn.setAttribute('aria-expanded', open ? 'false' : 'true');
+    btn.textContent = open ? 'How this predictor works ▾' : 'How this predictor works ▴';
 }
 
 function escapeHtml(s) {
@@ -724,61 +747,80 @@ async function submitPrediction() {
 
     try {
         setPredictLoading(true);
-        setRequestStatus(INSTANT_NO_SERVER_MODE ? 'Calculating locally (instant mode)...' : 'Submitting your prediction request...', 'info');
 
-        if (INSTANT_NO_SERVER_MODE) {
+        const runLocal = () => {
             const data = computePredictionLocally(payload);
             if (!data.ok) {
                 showFormErrors(data);
                 setRequestStatus('Almost there. Add a graded item above to continue.', 'warn');
+                return null;
+            }
+            data._computed_in_browser = true;
+            return data;
+        };
+
+        if (PREFER_BACKEND_PREDICT) {
+            setRequestStatus('Calling grade API…', 'info');
+            try {
+                const ctrl = new AbortController();
+                const timer = setTimeout(() => ctrl.abort(), 45000);
+                const res = await fetch('/predict', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload),
+                    signal: ctrl.signal
+                });
+                clearTimeout(timer);
+
+                let data;
+                try {
+                    data = await res.json();
+                } catch (parseErr) {
+                    data = null;
+                }
+
+                if (res.ok && data && data.ok) {
+                    clearFormErrors();
+                    clearRequestStatus();
+                    displayResults(data, study, attend, assign, totalWeight);
+                    return;
+                }
+
+                if (res.status === 400 && data && data.errors) {
+                    showFormErrors(data);
+                    setRequestStatus('Fix the items above, then try again.', 'warn');
+                    return;
+                }
+
+                setRequestStatus('Using browser syllabus math (API unavailable on this host).', 'warn');
+                const local = runLocal();
+                if (local) {
+                    clearFormErrors();
+                    displayResults(local, study, attend, assign, totalWeight);
+                }
+                return;
+            } catch (netErr) {
+                if (netErr.name === 'AbortError') {
+                    setRequestStatus('Request timed out. Trying browser calculation…', 'warn');
+                } else {
+                    setRequestStatus('Using browser syllabus math (offline or static preview).', 'warn');
+                }
+                const local = runLocal();
+                if (local) {
+                    clearFormErrors();
+                    displayResults(local, study, attend, assign, totalWeight);
+                }
                 return;
             }
+        }
+
+        setRequestStatus('Calculating locally…', 'info');
+        const localOnly = runLocal();
+        if (localOnly) {
             clearFormErrors();
             clearRequestStatus();
-            displayResults(data, study, attend, assign, totalWeight);
-            return;
+            displayResults(localOnly, study, attend, assign, totalWeight);
         }
-
-        const ctrl = new AbortController();
-        const timer = setTimeout(() => ctrl.abort(), 45000);
-
-        const res  = await fetch('/predict', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(payload),
-            signal: ctrl.signal
-        });
-        clearTimeout(timer);
-        let data;
-        try {
-            data = await res.json();
-        } catch (parseErr) {
-            showFormErrors({ errors: [{ field: '_response', message: 'Could not read server response.' }] });
-            setRequestStatus('Server returned an unreadable response.', 'warn');
-            return;
-        }
-        if (!res.ok) {
-            showFormErrors(data);
-            setRequestStatus('Request reached server, but input validation failed.', 'warn');
-            return;
-        }
-        clearFormErrors();
-        clearRequestStatus();
-        displayResults(data, study, attend, assign, totalWeight);
-    } catch (err) {
-        if (err.name === 'AbortError') {
-            showFormErrors({
-                errors: [{
-                    field: '_timeout',
-                    message: 'Server is taking too long. If hosted on free Render, it may be waking up. Please try again in 20-60 seconds.',
-                }],
-            });
-            setRequestStatus('Server wake-up timeout (free tier cold start).', 'warn');
-        } else {
-            showFormErrors({ errors: [{ field: '_network', message: 'Could not reach the server. Is the app running?' }] });
-            setRequestStatus('Network error while contacting server.', 'warn');
-        }
-        console.error(err);
     } finally {
         setPredictLoading(false);
     }
@@ -899,7 +941,6 @@ function computePredictionLocally(payload) {
             prediction_display: predictionDisplay,
             score_scale_base: scoreScaleBase,
             prediction_source: 'instant_local',
-            ml_prediction: Number(predictionPercent.toFixed(1)),
             grade_letter: '--',
             message: 'Numeric score mode: thresholds disabled.',
             grading_mode: 'custom_score',
@@ -983,6 +1024,22 @@ function displayResults(data, study, attend, assign, requirementWeightSum) {
     document.getElementById('result-grade').textContent = useLetters ? data.grade_letter : `${shownScore}`;
     document.getElementById('result-grade').style.color = color;
     document.getElementById('result-message').textContent = useLetters ? data.message : `Score out of ${data.score_scale_base || 100}`;
+    const mlNote = document.getElementById('result-ml-note');
+    const srcNote = document.getElementById('result-source-note');
+    if (data.ml_ran && data.ml_prediction_percent != null) {
+        mlNote.textContent = `ML estimate (component-pattern model): ${data.ml_prediction_percent}%`;
+        mlNote.classList.remove('hidden');
+    } else {
+        mlNote.textContent = '';
+        mlNote.classList.add('hidden');
+    }
+    if (data._computed_in_browser || data.prediction_source === 'instant_local') {
+        srcNote.textContent = 'Primary grade uses syllabus math in your browser. Host the Flask app to enable the optional ML line from the trained model.';
+        srcNote.classList.remove('hidden');
+    } else {
+        srcNote.textContent = '';
+        srcNote.classList.add('hidden');
+    }
     document.getElementById('result-grade-card').style.borderColor = color + '40';
     document.getElementById('result-grade-card').style.background = `linear-gradient(135deg, ${color}12, ${color}06)`;
 
