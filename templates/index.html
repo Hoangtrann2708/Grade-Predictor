@@ -40,6 +40,12 @@
                 </span>
             </button>
         </div>
+        <div class="sub-label" style="margin-top:14px;">Final Score Engine</div>
+        <p class="section-desc" style="margin-bottom:10px;">Choose how the final numeric score is produced before threshold/curve mapping.</p>
+        <select id="prediction-engine" class="factor-add-select" style="max-width:320px;">
+            <option value="syllabus">Syllabus weighted score (recommended)</option>
+            <option value="performance_ml">Performance forecast (ML from previous components)</option>
+        </select>
     </div>
 
     <!-- ═══════════ TWO COLUMN LAYOUT ═══════════ -->
@@ -594,6 +600,7 @@ async function submitPrediction() {
     const payload = {
         study_hours: study, attendance: attend, assignment_avg: assign,
         past_gpa, sleep_hours, grading_mode: currentMode,
+        prediction_engine: document.getElementById('prediction-engine').value || 'syllabus',
         requirements,
         requirements_weight_sum: totalWeight,
         score_scale_base: getDefaultScoreTotal(),
@@ -663,6 +670,9 @@ async function submitPrediction() {
                 return null;
             }
             data._computed_in_browser = true;
+            if (payload.prediction_engine === 'performance_ml') {
+                data._ml_unavailable_local = true;
+            }
             return data;
         };
 
@@ -946,7 +956,18 @@ function displayResults(data, study, attend, assign, requirementWeightSum) {
         mlNote.classList.add('hidden');
     }
     if (data._computed_in_browser || data.prediction_source === 'instant_local') {
-        srcNote.textContent = 'Primary grade uses syllabus math in your browser. Host the Flask app to enable the optional ML line from the trained model.';
+        if (data._ml_unavailable_local) {
+            srcNote.textContent = 'ML performance forecast needs Flask API/model files. Browser fallback used syllabus weighted score.';
+        } else {
+            srcNote.textContent = 'Browser fallback used syllabus weighted score.';
+        }
+        srcNote.classList.remove('hidden');
+    } else if (data.prediction_source === 'ml_performance_forecast') {
+        const base = data.syllabus_prediction_percent;
+        srcNote.textContent = `Final score engine: Performance ML forecast${base !== undefined ? ` (syllabus weighted baseline: ${base}%)` : ''}.`;
+        srcNote.classList.remove('hidden');
+    } else if (data.prediction_source === 'weighted_requirements') {
+        srcNote.textContent = 'Final score engine: Syllabus weighted score from your entered components.';
         srcNote.classList.remove('hidden');
     } else {
         srcNote.textContent = '';

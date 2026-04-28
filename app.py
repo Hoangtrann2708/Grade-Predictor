@@ -191,6 +191,12 @@ def _validate_predict(data):
             'field': 'grading_mode',
             'message': 'grading_mode must be "custom_score" or "curve".',
         })
+    prediction_engine = data.get('prediction_engine', 'syllabus')
+    if prediction_engine not in ('syllabus', 'performance_ml'):
+        errors.append({
+            'field': 'prediction_engine',
+            'message': 'prediction_engine must be "syllabus" or "performance_ml".',
+        })
 
     raw_reqs = data.get('requirements')
     parsed_requirements = []
@@ -432,6 +438,7 @@ def _validate_predict(data):
         'past_gpa': past_gpa,
         'sleep_hours': sleep_hours,
         'grading_mode': grading_mode,
+        'prediction_engine': prediction_engine,
         'requirements': parsed_requirements,
         'score_scale_base': score_scale_base,
         'use_letter_grades': use_letter_grades,
@@ -485,6 +492,7 @@ def predict():
 
     p = parsed
     grading_mode = p['grading_mode']
+    prediction_engine = p.get('prediction_engine', 'syllabus')
 
     # Syllabus-style weighted score only (validated: at least one requirement).
     requirements = p.get('requirements', [])
@@ -500,8 +508,12 @@ def predict():
         if r.get('is_extra_credit')
     )
     weighted_points = base_points + extra_credit_points
-    prediction = round(float(max(0.0, min(100.0, weighted_points))), 1)
+    weighted_prediction = round(float(max(0.0, min(100.0, weighted_points))), 1)
+    prediction = weighted_prediction
     prediction_source = 'weighted_requirements'
+    if prediction_engine == 'performance_ml' and ml_fields.get('ml_ran') and ml_fields.get('ml_prediction_percent') is not None:
+        prediction = float(ml_fields['ml_prediction_percent'])
+        prediction_source = 'ml_performance_forecast'
 
     score_scale_base = p.get('score_scale_base', 100.0)
     prediction_display = round((prediction * score_scale_base) / 100.0, 2)
@@ -589,6 +601,8 @@ def predict():
             'score_scale_base': score_scale_base,
             'use_letter_grades': True,
             'prediction_source': prediction_source,
+            'prediction_engine': prediction_engine,
+            'syllabus_prediction_percent': weighted_prediction,
             'requirements_total_weight': round(sum(r['weight'] for r in requirements), 2),
             'grade_letter': grade_letter,
             'message': message,
@@ -667,6 +681,8 @@ def predict():
         'score_scale_base': score_scale_base,
         'use_letter_grades': use_letter_grades,
         'prediction_source': prediction_source,
+        'prediction_engine': prediction_engine,
+        'syllabus_prediction_percent': weighted_prediction,
         'requirements_total_weight': round(sum(r['weight'] for r in requirements), 2),
         'grade_letter': grade_letter,
         'message': message,
