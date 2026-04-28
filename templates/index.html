@@ -49,7 +49,6 @@
         <div id="how-it-works-body" class="how-it-works-body hidden">
             <p><strong>Course grade (what matters):</strong> Built from your <strong>weighted requirements</strong> (homework, midterms, etc.). Names like &ldquo;Midterm 1&rdquo; / &ldquo;HW&rdquo; map into component slots. That weighted total is your syllabus-style score (0–100).</p>
             <p><strong>Letters:</strong> <strong>Custom Score</strong> compares that total to your A/B/C/D thresholds. <strong>Curve</strong> compares it to class statistics using percentiles. Different classes → different inputs and rules; your mode choice matches how that class is graded.</p>
-            <p><strong>Optional Study / Sleep / Attendance:</strong> Only personalize <strong>tips</strong>. They do not change the syllabus total.</p>
             <p><strong>ML row (when the API loads model files):</strong> An extra numeric estimate from <code>model/train_model.py</code> trained on synthetic multi-component data — useful as a demo, not a substitute for your syllabus math when weights are known.</p>
         </div>
     </div>
@@ -68,19 +67,6 @@
                 <p class="section-desc" id="requirements-hint"><strong>Your scores:</strong> name, points, weight per row. Use 0–100, a fraction (e.g. 17/20), or a %. <strong>Class stats for this item:</strong> Curve mode only.</p>
             </div>
 
-            <div class="card">
-                <div class="section-label-row">
-                    <div><span class="dot dot-teal"></span> <span class="section-label-text">Optional Improvement Factors</span></div>
-                    <select id="factor-add-select" class="factor-add-select" aria-label="Add improvement factor" onchange="addSelectedFactor()">
-                        <option value="">Add factor…</option>
-                        <option value="study_hours">Study hours</option>
-                        <option value="sleep_hours">Sleep hours</option>
-                        <option value="attendance">Attendance</option>
-                    </select>
-                </div>
-                <div id="custom-factors"></div>
-                <p class="section-desc" id="factor-hint">Optional. Add study, sleep, and/or attendance; units show on each row.</p>
-            </div>
         </div>
 
         <!-- RIGHT COLUMN -->
@@ -262,13 +248,6 @@
 <script>
 let currentMode = 'custom_score';
 let requirementCount = 0;
-
-/** Fixed lifestyle factors (API still receives past_gpa default server-side). */
-const FACTOR_DEFS = {
-    study_hours: { label: 'Study hours', unit: 'h/day', default: 4, min: 0, max: 24, step: 0.25 },
-    sleep_hours: { label: 'Sleep hours', unit: 'h/day', default: 7, min: 0, max: 24, step: 0.25 },
-    attendance: { label: 'Attendance', unit: '%', default: 85, min: 0, max: 100, step: 0.5 },
-};
 const gradeVariants = new Set();
 // Experimental: compute predictions in browser to avoid backend wait.
 /** Try Flask /predict first (ML + full response); fall back to browser syllabus math on static hosts. */
@@ -546,56 +525,6 @@ function removeRequirement(id) {
     }
 }
 
-function refreshFactorAddSelect() {
-    const sel = document.getElementById('factor-add-select');
-    if (!sel) return;
-    const active = new Set(
-        [...document.querySelectorAll('.factor-row[data-factor]')].map(r => r.dataset.factor),
-    );
-    [...sel.options].forEach(opt => {
-        if (!opt.value) return;
-        opt.disabled = active.has(opt.value);
-    });
-    sel.disabled = active.size >= Object.keys(FACTOR_DEFS).length;
-}
-
-function addSelectedFactor() {
-    const sel = document.getElementById('factor-add-select');
-    const key = sel && sel.value;
-    if (!key || !FACTOR_DEFS[key] || document.getElementById(`factor-row-${key}`)) {
-        if (sel) sel.value = '';
-        return;
-    }
-    const def = FACTOR_DEFS[key];
-    const div = document.createElement('div');
-    div.className = 'factor-row';
-    div.id = `factor-row-${key}`;
-    div.dataset.factor = key;
-    div.innerHTML = `
-        <span class="factor-fixed-label">${def.label}</span>
-        <div class="factor-value-wrap">
-            <input type="number" class="factor-value-input" min="${def.min}" max="${def.max}" step="${def.step}" value="${def.default}"
-                aria-label="${def.label} in ${def.unit}">
-            <span class="factor-unit">${def.unit}</span>
-        </div>
-        <button type="button" class="factor-remove" onclick="removeFactorRow('${key}')" aria-label="Remove ${def.label}">×</button>
-    `;
-    document.getElementById('custom-factors').appendChild(div);
-    document.getElementById('factor-hint').style.display = 'none';
-    sel.value = '';
-    refreshFactorAddSelect();
-}
-
-function removeFactorRow(key) {
-    const el = document.getElementById(`factor-row-${key}`);
-    if (el) el.remove();
-    const list = document.getElementById('custom-factors');
-    if (list && list.children.length === 0) {
-        document.getElementById('factor-hint').style.display = 'block';
-    }
-    refreshFactorAddSelect();
-}
-
 function addGradeVariant(label) {
     if (gradeVariants.has(label)) return;
     gradeVariants.add(label);
@@ -673,16 +602,6 @@ async function submitPrediction() {
         // This preserves extra-credit effect instead of normalizing by total weight.
         assign = weightedTotal / 100;
     }
-
-    document.querySelectorAll('.factor-row[data-factor]').forEach(f => {
-        const key = f.dataset.factor;
-        const raw = f.querySelector('.factor-value-input')?.value;
-        const val = parseFloat(raw);
-        if (isNaN(val)) return;
-        if (key === 'study_hours') study = val;
-        else if (key === 'attendance') attend = val;
-        else if (key === 'sleep_hours') sleep_hours = val;
-    });
 
     const payload = {
         study_hours: study, attendance: attend, assignment_avg: assign,
@@ -1163,7 +1082,6 @@ async function warmupServerHealth() {
 warmupServerHealth();
 toggleLetterGrades();
 updateRequirementCurveStatsVisibility();
-refreshFactorAddSelect();
 </script>
 
 </body>
