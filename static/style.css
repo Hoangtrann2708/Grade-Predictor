@@ -101,6 +101,29 @@ body {
     margin-bottom: 16px;
     line-height: 1.5;
 }
+.component-presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 4px 0 12px;
+}
+.preset-btn {
+    padding: 7px 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(99,102,241,.28);
+    background: rgba(99,102,241,.08);
+    color: #c7d2fe;
+    font-size: 12px;
+    font-weight: 700;
+    font-family: 'DM Sans', sans-serif;
+    cursor: pointer;
+    transition: all .15s ease;
+}
+.preset-btn:hover {
+    border-color: rgba(99,102,241,.5);
+    background: rgba(99,102,241,.16);
+    color: #eef2ff;
+}
 .sub-label { font-size: 12px; font-weight: 700; color: rgba(255,255,255,.5); margin-bottom: 10px; }
 .dot { width: 6px; height: 6px; border-radius: 3px; display: inline-block; }
 .dot-purple { background: #6366f1; }
