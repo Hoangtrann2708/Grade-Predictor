@@ -1018,14 +1018,20 @@ function displayResults(data, study, attend, assign, requirementWeightSum) {
     } else if (data.prediction_source === 'weighted_requirements') {
         srcNote.textContent = 'Final score engine: Syllabus weighted score from your entered components.';
         srcNote.classList.remove('hidden');
+    } else if (data.prediction_source === 'completed_components_projection') {
+        srcNote.textContent = 'Final score engine: Forecast fallback from entered performance components (ML unavailable).';
+        srcNote.classList.remove('hidden');
     } else {
         srcNote.textContent = '';
         srcNote.classList.add('hidden');
     }
     const knownWeight = Number(data.known_weight_percent ?? requirementWeightSum ?? 0);
     const completedScore = Number(data.completed_components_score ?? 0);
-    if (!isNaN(knownWeight) && knownWeight > 0 && knownWeight < 99.99) {
-        completionNote.textContent = `Components entered: ${knownWeight.toFixed(1)}% of syllabus. Completed-components score: ${completedScore.toFixed(1)}. Overall projection assumes remaining ${Math.max(0, 100 - knownWeight).toFixed(1)}% is 0 for now.`;
+    if (data.prediction_source === 'weighted_requirements' && !isNaN(knownWeight) && knownWeight > 0 && knownWeight < 99.99) {
+        completionNote.textContent = `Components entered: ${knownWeight.toFixed(1)}% of syllabus. Overall projection currently treats remaining ${Math.max(0, 100 - knownWeight).toFixed(1)}% as 0.`;
+        completionNote.classList.remove('hidden');
+    } else if (data.prediction_source === 'completed_components_projection' && !isNaN(knownWeight) && knownWeight > 0) {
+        completionNote.textContent = `ML unavailable. Forecast mode fallback uses completed components only: ${completedScore.toFixed(1)} from ${knownWeight.toFixed(1)}% entered weight.`;
         completionNote.classList.remove('hidden');
     } else if (!isNaN(knownWeight) && knownWeight >= 99.99) {
         completionNote.textContent = `Components entered cover ${knownWeight.toFixed(1)}% of syllabus.`;

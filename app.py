@@ -523,6 +523,10 @@ def predict():
     if prediction_engine == 'performance_ml' and ml_fields.get('ml_ran') and ml_fields.get('ml_prediction_percent') is not None:
         prediction = float(ml_fields['ml_prediction_percent'])
         prediction_source = 'ml_performance_forecast'
+    elif prediction_engine == 'performance_ml':
+        # Forecast mode fallback: project from entered components only (not missing-as-zero overall).
+        prediction = completed_components_score
+        prediction_source = 'completed_components_projection'
 
     score_scale_base = p.get('score_scale_base', 100.0)
     prediction_display = round((prediction * score_scale_base) / 100.0, 2)
