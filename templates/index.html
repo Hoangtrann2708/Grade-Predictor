@@ -188,6 +188,7 @@
                 <div class="result-message" id="result-message">Predicted final score (0-100)</div>
                 <p class="result-detail-note hidden" id="result-ml-note"></p>
                 <p class="result-detail-note result-detail-muted hidden" id="result-source-note"></p>
+                <p class="result-detail-note hidden" id="result-completion-note"></p>
                 <div class="result-score-ring">
                     <svg width="160" height="160">
                         <circle cx="80" cy="80" r="68" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="8"/>
@@ -995,6 +996,7 @@ function displayResults(data, study, attend, assign, requirementWeightSum) {
     document.getElementById('outcome-message').textContent = data.message || '';
     const mlNote = document.getElementById('result-ml-note');
     const srcNote = document.getElementById('result-source-note');
+    const completionNote = document.getElementById('result-completion-note');
     if (data.ml_ran && data.ml_prediction_percent != null) {
         mlNote.textContent = `ML estimate (component-pattern model): ${data.ml_prediction_percent}%`;
         mlNote.classList.remove('hidden');
@@ -1019,6 +1021,18 @@ function displayResults(data, study, attend, assign, requirementWeightSum) {
     } else {
         srcNote.textContent = '';
         srcNote.classList.add('hidden');
+    }
+    const knownWeight = Number(data.known_weight_percent ?? requirementWeightSum ?? 0);
+    const completedScore = Number(data.completed_components_score ?? 0);
+    if (!isNaN(knownWeight) && knownWeight > 0 && knownWeight < 99.99) {
+        completionNote.textContent = `Components entered: ${knownWeight.toFixed(1)}% of syllabus. Completed-components score: ${completedScore.toFixed(1)}. Overall projection assumes remaining ${Math.max(0, 100 - knownWeight).toFixed(1)}% is 0 for now.`;
+        completionNote.classList.remove('hidden');
+    } else if (!isNaN(knownWeight) && knownWeight >= 99.99) {
+        completionNote.textContent = `Components entered cover ${knownWeight.toFixed(1)}% of syllabus.`;
+        completionNote.classList.remove('hidden');
+    } else {
+        completionNote.textContent = '';
+        completionNote.classList.add('hidden');
     }
     document.getElementById('result-grade-card').style.borderColor = color + '40';
     document.getElementById('result-grade-card').style.background = `linear-gradient(135deg, ${color}12, ${color}06)`;

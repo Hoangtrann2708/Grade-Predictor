@@ -509,6 +509,15 @@ def predict():
     )
     weighted_points = base_points + extra_credit_points
     weighted_prediction = round(float(max(0.0, min(100.0, weighted_points))), 1)
+    known_weight_percent = round(
+        sum(float(r.get('weight', 0)) for r in requirements if not r.get('is_extra_credit')), 2
+    )
+    if known_weight_percent > 0:
+        completed_components_score = round(
+            float(max(0.0, min(100.0, weighted_points / (known_weight_percent / 100.0)))), 1
+        )
+    else:
+        completed_components_score = weighted_prediction
     prediction = weighted_prediction
     prediction_source = 'weighted_requirements'
     if prediction_engine == 'performance_ml' and ml_fields.get('ml_ran') and ml_fields.get('ml_prediction_percent') is not None:
@@ -603,6 +612,8 @@ def predict():
             'prediction_source': prediction_source,
             'prediction_engine': prediction_engine,
             'syllabus_prediction_percent': weighted_prediction,
+            'known_weight_percent': known_weight_percent,
+            'completed_components_score': completed_components_score,
             'requirements_total_weight': round(sum(r['weight'] for r in requirements), 2),
             'grade_letter': grade_letter,
             'message': message,
@@ -683,6 +694,8 @@ def predict():
         'prediction_source': prediction_source,
         'prediction_engine': prediction_engine,
         'syllabus_prediction_percent': weighted_prediction,
+        'known_weight_percent': known_weight_percent,
+        'completed_components_score': completed_components_score,
         'requirements_total_weight': round(sum(r['weight'] for r in requirements), 2),
         'grade_letter': grade_letter,
         'message': message,
