@@ -11,10 +11,10 @@ The `/predict` endpoint scores from **those inputs only** (weights + scores + yo
 ## Demo
 
 - **Instant live demo (Vercel — use this first, including new branches / PR previews):**  
-  [https://grade-predictor-nine.vercel.app](https://grade-predictor-nine.vercel.app)
+[https://grade-predictor-nine.vercel.app](https://grade-predictor-nine.vercel.app)
 - **Local:** [http://127.0.0.1:5000](http://127.0.0.1:5000)
 - **Full Flask API on Render (optional — free tier may cold-start ~30–60s after idle):**  
-  [https://grade-predictor-1-zjns.onrender.com](https://grade-predictor-1-zjns.onrender.com)
+[https://grade-predictor-1-zjns.onrender.com](https://grade-predictor-1-zjns.onrender.com)
 
 **After you push a branch:** open the **Vercel** preview or production URL for a fast UI load. Prefer that over the Render link for demos and recruiter screens.
 
