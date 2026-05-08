@@ -68,6 +68,7 @@
                 </div>
                 <div id="requirements-list"></div>
                 <p class="section-desc" id="requirements-hint"><strong>Your scores:</strong> name, points, weight per row. Use 0–100, a fraction (e.g. 17/20), or a %. <strong>Class stats for this item:</strong> Curve mode only.</p>
+                <p class="section-desc hidden" id="ml-mode-hint"><strong>ML mode:</strong> add the components you <em>already have</em> (e.g. Midterm 1 20%, Midterm 2 30%, Attendance 10%) with their syllabus weights. Whatever weight is left to reach 100% is treated as the <strong>Final Exam</strong> and the model predicts that score for you. Your <strong>Overall</strong> = entered components + predicted final, then scored against your Custom Score thresholds or the Curve.</p>
             </div>
 
         </div>
@@ -331,16 +332,18 @@ function updatePredictionEngineUI() {
     const hint = document.getElementById('requirements-hint');
     const label = document.getElementById('requirements-section-label');
     const addBtn = document.getElementById('add-requirement-btn');
+    const mlHint = document.getElementById('ml-mode-hint');
 
     if (presets) presets.classList.toggle('hidden', !isForecast);
     if (hint) hint.classList.toggle('hidden', isForecast);
-    if (label) label.textContent = isForecast ? 'Performance Inputs' : 'Input Requirements';
+    if (mlHint) mlHint.classList.toggle('hidden', !isForecast);
+    if (label) label.textContent = isForecast ? 'Components You Already Have' : 'Input Requirements';
     if (addBtn) addBtn.textContent = isForecast ? '+ Add Component' : '+ Add Requirement';
 
     if (isForecast && document.getElementById('requirements-list').children.length === 0) {
-        addRequirementPreset('homework_avg');
         addRequirementPreset('midterm_1');
         addRequirementPreset('midterm_2');
+        addRequirementPreset('attendance_pct');
     }
 }
 
@@ -997,8 +1000,12 @@ function displayResults(data, study, attend, assign, requirementWeightSum) {
     const mlNote = document.getElementById('result-ml-note');
     const srcNote = document.getElementById('result-source-note');
     const completionNote = document.getElementById('result-completion-note');
-    if (data.ml_ran && data.ml_prediction_percent != null) {
-        mlNote.textContent = `ML estimate (component-pattern model): ${data.ml_prediction_percent}%`;
+    if (data.ml_ran && data.ml_predicted_final_score != null) {
+        const overall = data.ml_overall_percent;
+        const finalScore = data.ml_predicted_final_score;
+        mlNote.textContent = overall != null
+            ? `Final exam được dự đoán là ${finalScore}% → Overall ${overall}%`
+            : `Final exam được dự đoán là ${finalScore}%`;
         mlNote.classList.remove('hidden');
     } else {
         mlNote.textContent = '';
@@ -1013,25 +1020,24 @@ function displayResults(data, study, attend, assign, requirementWeightSum) {
         srcNote.classList.remove('hidden');
     } else if (data.prediction_source === 'ml_performance_forecast') {
         const base = data.syllabus_prediction_percent;
-        srcNote.textContent = `Final score engine: Performance ML forecast${base !== undefined ? ` (syllabus weighted baseline: ${base}%)` : ''}.`;
+        const baseTxt = base !== undefined
+            ? ` Weighted sum from entered components only (if final were 0): ${base}%.`
+            : '';
+        srcNote.textContent = `Final score engine: Performance ML forecast.${baseTxt}`;
         srcNote.classList.remove('hidden');
     } else if (data.prediction_source === 'weighted_requirements') {
-        srcNote.textContent = 'Final score engine: Syllabus weighted score from your entered components.';
-        srcNote.classList.remove('hidden');
-    } else if (data.prediction_source === 'completed_components_projection') {
-        srcNote.textContent = 'Final score engine: Forecast fallback from entered performance components (ML unavailable).';
+        srcNote.textContent =
+            data.prediction_engine === 'performance_ml'
+                ? 'Performance forecast selected but ML did not run; using syllabus weighted score from your entered components.'
+                : 'Final score engine: Syllabus weighted score from your entered components.';
         srcNote.classList.remove('hidden');
     } else {
         srcNote.textContent = '';
         srcNote.classList.add('hidden');
     }
     const knownWeight = Number(data.known_weight_percent ?? requirementWeightSum ?? 0);
-    const completedScore = Number(data.completed_components_score ?? 0);
     if (data.prediction_source === 'weighted_requirements' && !isNaN(knownWeight) && knownWeight > 0 && knownWeight < 99.99) {
         completionNote.textContent = `Components entered: ${knownWeight.toFixed(1)}% of syllabus. Overall projection currently treats remaining ${Math.max(0, 100 - knownWeight).toFixed(1)}% as 0.`;
-        completionNote.classList.remove('hidden');
-    } else if (data.prediction_source === 'completed_components_projection' && !isNaN(knownWeight) && knownWeight > 0) {
-        completionNote.textContent = `ML unavailable. Forecast mode fallback uses completed components only: ${completedScore.toFixed(1)} from ${knownWeight.toFixed(1)}% entered weight.`;
         completionNote.classList.remove('hidden');
     } else if (!isNaN(knownWeight) && knownWeight >= 99.99) {
         completionNote.textContent = `Components entered cover ${knownWeight.toFixed(1)}% of syllabus.`;

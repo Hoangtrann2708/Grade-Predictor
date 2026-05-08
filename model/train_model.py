@@ -1,27 +1,28 @@
 """
-Train a regression model on SYNTHETIC syllabus-style component grades → final grade.
+Train a regression model that predicts the *final exam* score from the other
+syllabus components (midterms, homework, attendance, quizzes, project) — used
+by the "Performance forecast (ML)" engine in the Flask app.
 
-Important (read before relying on predictions):
-─────────────────────────────────────────────────
-• If the user already enters every component score AND the syllabus weights are
-  known, the course final is *defined* by weighted sum — that is algebra, not ML.
+Why this shape (read before retraining):
+─────────────────────────────────────────
+• Course Overall is just  sum(score_i * weight_i / 100)  by definition. That
+  part is algebra and stays in app.py.
+• What ML *can* help with is filling in the one component the student does
+  not have yet — typically the final exam — using the components they already
+  have. So the label here is `final_exam`; features are the *other* component
+  scores plus a mask saying which of those they actually entered.
 
-• This script simulates many different syllabi in one dataset: each row has a
-  random subset of categories (homework, midterms, attendance, …) with random
-  nonnegative weights that sum to 1. The label is exactly that weighted sum of
-  0–100 component scores (+ small noise). Any sklearn model is learning to
-  approximate that mapping from masked features.
-
-• Replace synthetic generation with REAL historical rows when you have them:
-  (student_id optional, component scores…, recorded final). Then retrain.
+Synthetic generation (replace with real rows when available):
+• Each simulated student gets a latent "ability" drawn uniformly.
+• Each component score = ability + per-component noise (correlated by design).
+• `final_exam` = ability + final-specific noise (the label).
+• During training we randomly mask a subset of the *input* components so the
+  model handles partial inputs (e.g., user only has Midterm 1 + Attendance).
 
 Outputs (written to ./model next to this file):
   grade_model.pkl  – best estimator on scaled features
   scaler.pkl       – StandardScaler fitted on training X
-  ml_meta.json     – feature names + short description for wiring into Flask
-
-Threshold vs percentile grading is NOT trained here — that stays in app.py /
-the UI after you have a predicted numeric final (same as today).
+  ml_meta.json     – feature/input layout so app.py can build matching rows
 """
 
 import json
@@ -39,78 +40,68 @@ from sklearn.preprocessing import StandardScaler
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MODEL_DIR = os.path.join(ROOT, 'model')
 
-# Fixed superset of gradebook categories (scores are 0–100 unless noted).
-# Extend this list if your app collects more columns — keep training aligned.
-COMPONENTS = [
+# Components the user might have a score for (always 0–100). `final_exam` is
+# intentionally NOT in this list — it's always the label.
+INPUT_COMPONENTS = [
     'homework_avg',
     'midterm_1',
     'midterm_2',
-    'final_exam',
     'project',
     'quiz_avg',
-    'attendance_pct',  # treat as a 0–100 “score bucket” when the class grades it
+    'attendance_pct',
 ]
+TARGET = 'final_exam'
+
+# Per-component noise (std) around the latent ability. Kept small so the
+# synthetic correlation between observed components and the final exam is
+# realistic but not deterministic. Tune with real data when available.
+COMPONENT_NOISE_SD = {
+    'homework_avg':  6.0,
+    'midterm_1':     8.0,
+    'midterm_2':     8.0,
+    'project':       7.0,
+    'quiz_avg':      6.0,
+    'attendance_pct': 5.0,
+    'final_exam':    9.0,
+}
 
 
-def random_syllabus_masks(rng: np.random.Generator, n_rows: int, min_active: int = 2):
-    """Each row: random subset of components (different syllabi)."""
-    masks = np.zeros((n_rows, len(COMPONENTS)), dtype=np.float64)
-    for i in range(n_rows):
-        k = rng.integers(min_active, len(COMPONENTS) + 1)
-        idx = rng.choice(len(COMPONENTS), size=k, replace=False)
-        masks[i, idx] = 1.0
-    return masks
-
-
-def random_weights_on_active(mask_row: np.ndarray, rng: np.random.Generator) -> np.ndarray:
-    """Nonnegative weights on active slots, sum to 1."""
-    active = mask_row > 0
-    if not np.any(active):
-        return mask_row
-    raw = rng.random(len(COMPONENTS)) * active.astype(float)
-    s = raw.sum()
-    if s <= 1e-9:
-        raw = active.astype(float)
-        s = raw.sum()
-    return raw / s
-
-
-def build_synthetic_dataset(n: int = 8000, seed: int = 42):
+def build_synthetic_dataset(n: int = 12000, seed: int = 42, min_active: int = 1):
+    """Generate (X, y) where y is final_exam and X is masked input components."""
     rng = np.random.default_rng(seed)
 
-    masks = random_syllabus_masks(rng, n)
-    scores = rng.uniform(35, 100, size=(n, len(COMPONENTS)))
+    ability = rng.uniform(45.0, 95.0, size=n)
 
-    finals = np.zeros(n, dtype=np.float64)
-    weights_list = []
+    raw_scores = np.zeros((n, len(INPUT_COMPONENTS)), dtype=np.float64)
+    for j, comp in enumerate(INPUT_COMPONENTS):
+        sd = COMPONENT_NOISE_SD[comp]
+        raw_scores[:, j] = np.clip(ability + rng.normal(0.0, sd, size=n), 0.0, 100.0)
 
-    for i in range(n):
-        w = random_weights_on_active(masks[i], rng)
-        weights_list.append(w)
-        pure = np.sum(w * masks[i] * scores[i])
-        noise = rng.normal(0, 1.2)
-        finals[i] = np.clip(pure + noise, 0, 100)
-
-    weights_list = np.array(weights_list)
-
-    # Features: masked scores + mask bits so the model sees which columns matter.
-    masked_scores = masks * scores
-    feature_blocks = [masked_scores, masks]
-    X = np.hstack(feature_blocks)
-
-    column_names = (
-        [f'score_{c}' for c in COMPONENTS]
-        + [f'uses_{c}' for c in COMPONENTS]
+    finals = np.clip(
+        ability + rng.normal(0.0, COMPONENT_NOISE_SD[TARGET], size=n), 0.0, 100.0
     )
 
-    df_X = pd.DataFrame(X, columns=column_names)
-    df_y = pd.Series(finals, name='final_grade')
-    return df_X, df_y, scores, masks, weights_list
+    masks = np.zeros_like(raw_scores)
+    for i in range(n):
+        k = rng.integers(min_active, len(INPUT_COMPONENTS) + 1)
+        idx = rng.choice(len(INPUT_COMPONENTS), size=k, replace=False)
+        masks[i, idx] = 1.0
+
+    masked_scores = raw_scores * masks
+    X = np.hstack([masked_scores, masks])
+
+    columns = (
+        [f'score_{c}' for c in INPUT_COMPONENTS]
+        + [f'uses_{c}' for c in INPUT_COMPONENTS]
+    )
+    df_X = pd.DataFrame(X, columns=columns)
+    df_y = pd.Series(finals, name=TARGET)
+    return df_X, df_y, masks
 
 
 def main():
-    print('Building synthetic multi-syllabus dataset…')
-    X_df, y_series, _, masks_arr, _ = build_synthetic_dataset()
+    print('Building synthetic latent-ability dataset (final exam as label)…')
+    X_df, y_series, masks_arr = build_synthetic_dataset()
 
     X_train, X_test, y_train, y_test = train_test_split(
         X_df, y_series, test_size=0.2, random_state=42
@@ -124,10 +115,10 @@ def main():
         'Linear Regression': LinearRegression(),
         'Ridge': Ridge(alpha=1.0),
         'Random Forest': RandomForestRegressor(
-            n_estimators=120, max_depth=12, random_state=42, n_jobs=-1
+            n_estimators=200, max_depth=14, random_state=42, n_jobs=-1
         ),
         'Gradient Boosting': GradientBoostingRegressor(
-            n_estimators=120, max_depth=4, random_state=42
+            n_estimators=200, max_depth=4, random_state=42
         ),
     }
 
@@ -150,32 +141,32 @@ def main():
     print(f'\nBest model: {best_name} with R²={best_r2:.4f}')
 
     os.makedirs(MODEL_DIR, exist_ok=True)
-
     with open(os.path.join(MODEL_DIR, 'grade_model.pkl'), 'wb') as f:
         pickle.dump(best_model, f)
     with open(os.path.join(MODEL_DIR, 'scaler.pkl'), 'wb') as f:
         pickle.dump(scaler, f)
 
     meta = {
+        'target': TARGET,
+        'input_components': INPUT_COMPONENTS,
         'feature_columns': list(X_df.columns),
-        'components': COMPONENTS,
         'description': (
-            'Masked component scores + binary syllabus masks. '
-            'Training labels are weighted sums with per-row random syllabi.'
+            'Predicts final_exam score from the other syllabus components. '
+            'Features are masked component scores followed by binary mask bits '
+            '(same order as input_components, length 2 * K).'
         ),
         'best_model': best_name,
         'best_r2_holdout': round(float(best_r2), 6),
+        'mean_active_inputs_per_row': round(float(masks_arr.sum(axis=1).mean()), 3),
         'note': (
-            'When real syllabus weights and all scores are known, compute final '
-            'with weighted sum in the app; use this ML only if you ingest '
-            'matching features from the client or imputation workflows.'
+            'Compute Overall in the app: weighted sum of entered components + '
+            'predicted final * remaining_weight / 100.'
         ),
     }
     with open(os.path.join(MODEL_DIR, 'ml_meta.json'), 'w', encoding='utf-8') as f:
         json.dump(meta, f, indent=2)
 
     print('\nSaved grade_model.pkl, scaler.pkl, ml_meta.json')
-    print(f'(Mean active components per row: {masks_arr.sum(axis=1).mean():.2f})')
 
 
 if __name__ == '__main__':
