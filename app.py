@@ -18,6 +18,18 @@ _ML_SCALER = None
 _ML_INPUT_COMPONENTS = None  # ordered list of input components (final_exam excluded)
 _ML_TARGET = 'final_exam'
 
+# ML mode: explicit component type per row (see templates dropdown). Placeholder = syllabus
+# weight reserved for final exam — excluded from entered score/weight sums.
+ALLOWED_COMPONENT_KEYS = frozenset({
+    'homework_avg',
+    'midterm_1',
+    'midterm_2',
+    'project',
+    'quiz_avg',
+    'attendance_pct',
+    'final_exam_placeholder',
+})
+
 
 def _load_ml_bundle():
     """Load grade_model.pkl + scaler.pkl + ml_meta.json if present."""
@@ -69,6 +81,20 @@ def _classify_requirement_name(name: str):
     return None
 
 
+def _resolve_ml_component_key(requirement):
+    """Prefer explicit component_key from client; fall back to name classification."""
+    raw = requirement.get('component_key')
+    if isinstance(raw, str):
+        k = raw.strip()
+        if k in ALLOWED_COMPONENT_KEYS:
+            return k
+    return _classify_requirement_name(str(requirement.get('name', '')))
+
+
+def _is_ml_final_placeholder_row(requirement):
+    return _resolve_ml_component_key(requirement) == 'final_exam_placeholder'
+
+
 def _ml_feature_row(requirements):
     """
     Build a 1 x (2K) feature row [masked input scores | mask bits] in the same
@@ -89,8 +115,8 @@ def _ml_feature_row(requirements):
     for r in requirements:
         if r.get('is_extra_credit'):
             continue
-        key = _classify_requirement_name(str(r.get('name', '')))
-        if key is None or key not in sums:
+        key = _resolve_ml_component_key(r)
+        if key is None or key == 'final_exam_placeholder' or key not in sums:
             continue
         try:
             sc = float(r['score'])
@@ -118,20 +144,6 @@ def _ml_feature_row(requirements):
     return np.array(row_scores + row_mask, dtype=np.float64).reshape(1, -1)
 
 
-def _ml_predict_final_score(requirements):
-    """ML estimate of the final-exam component score (0–100). Returns (value or None, ran)."""
-    row = _ml_feature_row(requirements)
-    if row is None:
-        return None, False
-    try:
-        x = _ML_SCALER.transform(row)
-        v = float(_ML_MODEL.predict(x)[0])
-        v = max(0.0, min(100.0, v))
-        return round(v, 1), True
-    except Exception:
-        return None, False
-
-
 def _split_requirements_for_ml(requirements):
     """
     Partition requirements for the ML overall calculation.
@@ -143,8 +155,8 @@ def _split_requirements_for_ml(requirements):
       entered_weight     – sum of those weights (capped at 100 for sanity).
       extra_points       – sum(score*weight/100) over extra-credit rows
                             (added to overall AFTER predicting final).
-      remaining_weight   – max(0, 100 - entered_weight). Treated as the
-                            final-exam weight.
+      remaining_weight   – max(0, 100 - entered_weight). Excludes final_exam_placeholder
+                            rows from entered_*; their weights do not fill the gap (gap is implicit).
     """
     entered_points = 0.0
     entered_weight = 0.0
@@ -160,6 +172,8 @@ def _split_requirements_for_ml(requirements):
         contrib = (sc * wt) / 100.0
         if r.get('is_extra_credit'):
             extra_points += contrib
+        elif _is_ml_final_placeholder_row(r):
+            continue
         else:
             entered_points += contrib
             entered_weight += wt
@@ -170,25 +184,61 @@ def _split_requirements_for_ml(requirements):
 
 def _ml_response_fields(requirements):
     """
-    Run the ML pipeline and report:
-      ml_predicted_final_score – predicted final-exam % (0–100)
-      ml_overall_percent       – overall % combining entered components +
-                                  predicted final * remaining_weight + extra credit
-      ml_remaining_weight      – weight assumed to be the final exam (100 - entered)
+    Run the ML pipeline and report ml_status plus prediction fields.
+    ml_status: ok | model_missing | no_classified_components | no_remaining_weight | predict_error
     """
-    final_pred, ran = _ml_predict_final_score(requirements)
     entered_points, entered_weight, extra_points, remaining_weight = (
         _split_requirements_for_ml(requirements)
     )
 
+    _load_ml_bundle()
+    model_loaded = (
+        _ML_MODEL is not None
+        and _ML_SCALER is not None
+        and bool(_ML_INPUT_COMPONENTS)
+    )
+
+    row = None
+    final_pred = None
+    ran_ok = False
+    predict_exc = False
+
+    if model_loaded:
+        row = _ml_feature_row(requirements)
+        if row is not None:
+            try:
+                x = _ML_SCALER.transform(row)
+                v = float(_ML_MODEL.predict(x)[0])
+                v = max(0.0, min(100.0, v))
+                final_pred = round(v, 1)
+                ran_ok = True
+            except Exception:
+                predict_exc = True
+
     overall_pct = None
-    if ran and final_pred is not None and remaining_weight > 0:
+    if ran_ok and final_pred is not None and remaining_weight > 0:
         overall_pct = entered_points + (final_pred * remaining_weight / 100.0) + extra_points
         overall_pct = round(max(0.0, min(100.0, overall_pct)), 1)
 
+    ml_ran = ran_ok and final_pred is not None
+
+    if not model_loaded:
+        ml_status = 'model_missing'
+    elif remaining_weight <= 0:
+        ml_status = 'no_remaining_weight'
+    elif row is None:
+        ml_status = 'no_classified_components'
+    elif predict_exc:
+        ml_status = 'predict_error'
+    elif overall_pct is not None:
+        ml_status = 'ok'
+    else:
+        ml_status = 'predict_error'
+
     return {
-        'ml_model_loaded': _ML_MODEL is not None and _ML_SCALER is not None,
-        'ml_ran': ran and final_pred is not None,
+        'ml_model_loaded': model_loaded,
+        'ml_ran': ml_ran,
+        'ml_status': ml_status,
         'ml_predicted_final_score': final_pred,
         'ml_overall_percent': overall_pct,
         'ml_entered_weight_percent': round(entered_weight, 2),
@@ -333,6 +383,20 @@ def _validate_predict(data):
                 'weight': wtf,
                 'is_extra_credit': is_extra_credit,
             })
+            ck_raw = item.get('component_key')
+            if ck_raw is not None and str(ck_raw).strip() != '':
+                ck = str(ck_raw).strip()
+                if ck in ALLOWED_COMPONENT_KEYS:
+                    parsed_requirements[-1]['component_key'] = ck
+                else:
+                    errors.append({
+                        'field': f'requirements[{i}].component_key',
+                        'message': (
+                            'component_key must be one of: '
+                            + ', '.join(sorted(ALLOWED_COMPONENT_KEYS))
+                            + '.'
+                        ),
+                    })
 
     if not parsed_requirements:
         errors.append({
@@ -563,7 +627,7 @@ def predict():
     base_points = sum(
         (r['score'] * r['weight']) / 100.0
         for r in requirements
-        if not r.get('is_extra_credit')
+        if not r.get('is_extra_credit') and not _is_ml_final_placeholder_row(r)
     )
     extra_credit_points = sum(
         (r['score'] * r['weight']) / 100.0
@@ -573,7 +637,12 @@ def predict():
     weighted_points = base_points + extra_credit_points
     weighted_prediction = round(float(max(0.0, min(100.0, weighted_points))), 1)
     known_weight_percent = round(
-        sum(float(r.get('weight', 0)) for r in requirements if not r.get('is_extra_credit')), 2
+        sum(
+            float(r.get('weight', 0))
+            for r in requirements
+            if not r.get('is_extra_credit') and not _is_ml_final_placeholder_row(r)
+        ),
+        2,
     )
     prediction = weighted_prediction
     prediction_source = 'weighted_requirements'
@@ -581,7 +650,7 @@ def predict():
     # entered weighted points + extra credit back. If anything fails (model not
     # loaded, no detectable inputs, weights already sum to 100) we silently
     # fall back to the syllabus weighted score so the page still works.
-    if prediction_engine == 'performance_ml' and ml_fields.get('ml_ran') and ml_fields.get('ml_overall_percent') is not None:
+    if prediction_engine == 'performance_ml' and ml_fields.get('ml_status') == 'ok':
         prediction = float(ml_fields['ml_overall_percent'])
         prediction_source = 'ml_performance_forecast'
 

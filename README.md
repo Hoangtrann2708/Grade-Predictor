@@ -1,122 +1,122 @@
 # Course Grade Predictor
 
-Course Grade Predictor is a Flask web app built around **syllabus-style grading**, not an ML-only guess:
+Course Grade Predictor is a Flask web app that turns raw assignment scores into a course Overall score and a letter grade. Two complementary engines:
 
-- weighted course components (including extra credit),
-- custom score thresholds (A/B/C/D with optional A-, B+, etc.),
-- curve / percentile mode.
+- **Syllabus weighted score** — algebraic `sum(score * weight / 100)`. The default; correct whenever you have every component graded.
+- **Performance forecast (ML)** — when the final exam (or any remaining slot) is missing, a scikit-learn model trained in `model/train_model.py` predicts that score from the components you already have, then the app rebuilds the Overall.
 
-The `/predict` endpoint scores from **those inputs only** (weights + scores + your chosen rules). Optional improvement rows are UI context; offline scripts in `model/train_model.py` remain for learning the ML training workflow.
+Both engines feed the same downstream grading logic: **Custom Score** (your own A/B/C/D thresholds, plus optional A-, B+, …) or **Curve / Percentile** (Overall vs class avg + std dev).
 
 ## Demo
 
-- **Instant live demo (Vercel — use this first, including new branches / PR previews):**  
-[https://grade-predictor-nine.vercel.app](https://grade-predictor-nine.vercel.app)
+- **Vercel (recommended, fast first paint):** [https://grade-predictor-nine.vercel.app](https://grade-predictor-nine.vercel.app)
+- **Render (full Flask API + ML, free tier cold-starts in ~30–60s after idle):** [https://grade-predictor-1-zjns.onrender.com](https://grade-predictor-1-zjns.onrender.com)
 - **Local:** [http://127.0.0.1:5000](http://127.0.0.1:5000)
-- **Full Flask API on Render (optional — free tier may cold-start ~30–60s after idle):**  
-[https://grade-predictor-1-zjns.onrender.com](https://grade-predictor-1-zjns.onrender.com)
 
-**After you push a branch:** open the **Vercel** preview or production URL for a fast UI load. Prefer that over the Render link for demos and recruiter screens.
-
-Recruiter note: Share the **Vercel** link for an instant first paint; mention Render only if you need to show the hosted Python API waking up.
+The ML engine only runs on the Render deployment (it needs the trained `*.pkl` artifacts). Vercel serves the static UI and falls back to in-browser syllabus math when the API is not reachable.
 
 ## Why This Project
 
-Different classes use different grading systems:
+Different classes use different grading rules and scales:
 
-- some use `0-100`,
-- some use `0-10`,
-- some use point-based scores like `29/30`.
+- some use `0-100`, some use `0-10`, some grade items as `29/30` points,
+- some weight components flat, some apply a curve,
+- some are still missing one or more components when you want to project your final grade.
 
-This app normalizes these inputs, applies the selected grading logic, and provides an actionable result.
+This app normalizes inputs (plain number, fraction like `17/20`, or percent like `85%`), applies the syllabus weights you provide, and either reports your current Overall or predicts the missing slot with ML before reporting it.
 
 ## Features
 
-- **Dual grading modes**
-  - Custom score thresholds
-  - Curve / percentile mode
-- **Flexible score entry**
-  - Accepts plain values, percentages (`85%`), and fractions (`29/30`)
-  - Uses a configurable "Default Out Of" base
-- **Weighted requirement math**
-  - Syllabus-style calculation
-  - Extra credit support
-- **Advanced custom scale**
-  - Add grade variants like `A-`, `B+`, `B-`
-- **Validation and UX safeguards**
-  - Clear form validation errors
-  - Request status/loading states
-  - Health check endpoint (`/health`)
+- **Two prediction engines**
+  - Syllabus weighted score (deterministic)
+  - Performance ML forecast — fills the remaining weight (typically the final exam) with a trained regressor and rebuilds Overall
+- **Per-row component picker (ML mode)** — pick `Homework`, `Midterm 1/2`, `Quiz avg`, `Project`, `Attendance`, or `Final (weight slot only)`; ML no longer relies on parsing the item name
+- **Two grading modes**
+  - Custom Score thresholds (with optional A-, B+, B-, C+, C-, D+, D- variants)
+  - Curve / Percentile based on class average, std dev, and median (overall or per-component)
+- **Flexible score entry** — `85`, `85%`, or `29/30` all work; fixed 100-point scale
+- **Extra credit** — extra-credit rows add to Overall but do not consume base weight
+- **Explainable response** — every `/predict` call returns:
+  - `prediction_source`: `ml_performance_forecast` | `weighted_requirements`
+  - `ml_status`: `ok` | `model_missing` | `no_classified_components` | `no_remaining_weight` | `predict_error`
+  - `ml_predicted_final_score`, `ml_overall_percent`, `ml_remaining_weight_percent`, `syllabus_prediction_percent`
+- **UX safeguards** — friendly validation errors, request status banner, `/health` endpoint, in-browser fallback when the API is offline
 
 ## Tech Stack
 
-- **Backend:** Python, Flask
-- **Training pipeline (offline, `model/train_model.py`):** scikit-learn, NumPy, SciPy, pandas — not loaded by `/predict` at runtime
-- **Frontend:** HTML, CSS, JavaScript
+- **Backend:** Python, Flask, NumPy, SciPy (curve stats), scikit-learn (ML inference)
+- **Training pipeline (offline, `model/train_model.py`):** scikit-learn `RandomForestRegressor` / `GradientBoostingRegressor` on synthetic latent-ability data, exporting `grade_model.pkl`, `scaler.pkl`, `ml_meta.json`
+- **Frontend:** HTML, CSS, vanilla JavaScript
 - **Production server:** Gunicorn
-- **Deployment:** Vercel (frontend / instant UI), Render / Railway (Flask API)
+- **Deployment:** Vercel (static UI / fast preview), Render or Railway (Flask API + ML)
 
 ## Local Setup
 
-1. Install dependencies:
-
 ```bash
 pip install -r requirements.txt
+python model/train_model.py     # generates model/grade_model.pkl + scaler.pkl + ml_meta.json
+python app.py                   # or: py app.py on Windows
 ```
 
-1. Train and save model artifacts:
+Open [http://127.0.0.1:5000](http://127.0.0.1:5000).
 
-```bash
-python model/train_model.py
+The ML engine activates only when those three model artifacts are present. Without them, the app keeps working in Syllabus mode and reports `ml_status: model_missing`.
+
+## API
+
+### `GET /health`
+Returns `{ ok, status, uptime_seconds }`.
+
+### `POST /predict`
+Request body (JSON):
+
+```json
+{
+  "prediction_engine": "performance_ml",
+  "grading_mode": "custom_score",
+  "use_letter_grades": true,
+  "threshold_a": 90, "threshold_b": 80, "threshold_c": 70, "threshold_d": 60,
+  "requirements": [
+    { "name": "Midterm 1",  "score": 80, "weight": 20, "component_key": "midterm_1" },
+    { "name": "Midterm 2",  "score": 85, "weight": 30, "component_key": "midterm_2" },
+    { "name": "Homework",   "score": 90, "weight": 20, "component_key": "homework_avg" }
+  ]
+}
 ```
 
-1. Start app:
+Notable response fields:
 
-```bash
-python app.py
-```
+- `prediction_percent` — Overall 0–100 used for grading
+- `prediction_source` — which engine produced it
+- `ml_status` — diagnostic for the ML path
+- `grade_letter`, `message`, `needed_for_a`
+- `percentile`, `z_score`, `diff_from_avg`, `diff_from_median` (when class stats are provided)
 
-Open `http://127.0.0.1:5000`  
-(On Windows, `py app.py` is also supported.)
-
-## API Endpoints
-
-- `GET /` - main UI
-- `GET /health` - service health check
-- `POST /predict` - prediction and grading response
+`component_key` is optional but recommended for ML mode. Allowed values: `homework_avg`, `midterm_1`, `midterm_2`, `project`, `quiz_avg`, `attendance_pct`, `final_exam_placeholder`. The placeholder row reserves syllabus weight for the missing final — its score is ignored and that weight is what the model fills.
 
 ## Deployment
 
-### Vercel (recommended for demos)
+### Vercel (UI + browser fallback)
+Connect the GitHub repo. Production tracks `main`; each branch / PR gets a Preview URL. ML inference is not available here; the page calls `/predict` and falls back to local syllabus math if the API isn't reachable.
 
-Connect the GitHub repo so **Production** uses your main branch and **Preview** deploys each branch / PR. Use those URLs when you want an instant-opening UI (especially after pushing a new branch).
+### Render (full Python + ML)
 
-### Render
-
-- **Build command**
-`pip install -r requirements.txt && python model/train_model.py`
-- **Start command**
-`gunicorn --bind 0.0.0.0:$PORT app:app`
+- **Build command:** `pip install -r requirements.txt && python model/train_model.py`
+- **Start command:** `gunicorn --bind 0.0.0.0:$PORT app:app`
 
 ### Railway
 
-- **Build command**
-`pip install -r requirements.txt && python model/train_model.py`
-- **Start command**
-`gunicorn --bind 0.0.0.0:$PORT app:app`
+- **Build command:** `pip install -r requirements.txt && python model/train_model.py`
+- **Start command:** `gunicorn --bind 0.0.0.0:$PORT app:app`
 
-## Reliability Note (Free Tier)
-
-Free-tier services can sleep after inactivity, causing cold-start delay on first request.
-This is platform behavior, not an application bug.
+Free tiers may cold-start the first request after a period of inactivity — expected platform behavior.
 
 ## Repository Structure
 
-- `app.py` - Flask routes, validation, grading logic
-- `templates/` - UI templates
-- `static/` - styling
-- `model/train_model.py` - model training and artifact export
-- `requirements.txt` - dependencies
-- `render.yaml`, `railway.toml`, `Procfile` - deploy configuration
-- `REPORT.md` - live test checklist/report
-
+- `app.py` — Flask routes, validation, syllabus + ML pipeline
+- `templates/index.html` — UI (engine selector, component picker, results)
+- `static/style.css` — styling
+- `model/train_model.py` — synthetic data + training; writes `grade_model.pkl`, `scaler.pkl`, `ml_meta.json`
+- `model/ml_meta.json` — feature column order and target metadata read by the app
+- `requirements.txt` — dependencies
+- `render.yaml`, `Procfile`, `runtime.txt` — deploy configuration

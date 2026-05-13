@@ -65,10 +65,11 @@
                     <button type="button" class="preset-btn" onclick="addRequirementPreset('quiz_avg')">Quiz Avg</button>
                     <button type="button" class="preset-btn" onclick="addRequirementPreset('project')">Project</button>
                     <button type="button" class="preset-btn" onclick="addRequirementPreset('attendance_pct')">Attendance</button>
+                    <button type="button" class="preset-btn" onclick="addRequirementPreset('final_exam_placeholder')">Final slot</button>
                 </div>
                 <div id="requirements-list"></div>
                 <p class="section-desc" id="requirements-hint"><strong>Your scores:</strong> name, points, weight per row. Use 0–100, a fraction (e.g. 17/20), or a %. <strong>Class stats for this item:</strong> Curve mode only.</p>
-                <p class="section-desc hidden" id="ml-mode-hint"><strong>ML mode:</strong> add the components you <em>already have</em> (e.g. Midterm 1 20%, Midterm 2 30%, Attendance 10%) with their syllabus weights. Whatever weight is left to reach 100% is treated as the <strong>Final Exam</strong> and the model predicts that score for you. Your <strong>Overall</strong> = entered components + predicted final, then scored against your Custom Score thresholds or the Curve.</p>
+                <p class="section-desc hidden" id="ml-mode-hint"><strong>ML mode:</strong> pick the <strong>Component</strong> type on each row (works even if the name is blank). Enter scores and syllabus weights for parts you already have; the rest of the 100% is treated as the final exam and filled by the model.</p>
             </div>
 
         </div>
@@ -262,13 +263,34 @@ let currentMode = 'custom_score';
 let requirementCount = 0;
 const gradeVariants = new Set();
 const REQUIREMENT_PRESETS = {
-    homework_avg: { name: 'Homework', weight: 20 },
-    midterm_1: { name: 'Midterm 1', weight: 20 },
-    midterm_2: { name: 'Midterm 2', weight: 20 },
-    quiz_avg: { name: 'Quiz Avg', weight: 10 },
-    project: { name: 'Project', weight: 20 },
-    attendance_pct: { name: 'Attendance', weight: 10 },
+    homework_avg: { name: 'Homework', weight: 20, component_key: 'homework_avg' },
+    midterm_1: { name: 'Midterm 1', weight: 20, component_key: 'midterm_1' },
+    midterm_2: { name: 'Midterm 2', weight: 20, component_key: 'midterm_2' },
+    quiz_avg: { name: 'Quiz Avg', weight: 10, component_key: 'quiz_avg' },
+    project: { name: 'Project', weight: 20, component_key: 'project' },
+    attendance_pct: { name: 'Attendance', weight: 10, component_key: 'attendance_pct' },
+    final_exam_placeholder: { name: 'Final exam', weight: 40, component_key: 'final_exam_placeholder', default_score: '0' },
 };
+
+/** ML dropdown options (must match server ALLOWED_COMPONENT_KEYS minus redundancy). */
+const ML_COMPONENT_OPTIONS = [
+    { value: 'homework_avg', label: 'Homework' },
+    { value: 'midterm_1', label: 'Midterm 1' },
+    { value: 'midterm_2', label: 'Midterm 2' },
+    { value: 'quiz_avg', label: 'Quiz avg' },
+    { value: 'project', label: 'Project' },
+    { value: 'attendance_pct', label: 'Attendance' },
+    { value: 'final_exam_placeholder', label: 'Final (weight slot only)' },
+];
+
+function buildMlComponentSelect(selectedValue, fallbackKey = 'midterm_1') {
+    const v = (selectedValue !== undefined && selectedValue !== null && String(selectedValue).trim() !== '')
+        ? String(selectedValue).trim()
+        : fallbackKey;
+    return ML_COMPONENT_OPTIONS.map(o =>
+        `<option value="${o.value}" ${v === o.value ? 'selected' : ''}>${o.label}</option>`
+    ).join('');
+}
 // Experimental: compute predictions in browser to avoid backend wait.
 /** Try Flask /predict first (ML + full response); fall back to browser syllabus math on static hosts. */
 const PREFER_BACKEND_PREDICT = true;
@@ -339,6 +361,10 @@ function updatePredictionEngineUI() {
     if (mlHint) mlHint.classList.toggle('hidden', !isForecast);
     if (label) label.textContent = isForecast ? 'Components You Already Have' : 'Input Requirements';
     if (addBtn) addBtn.textContent = isForecast ? '+ Add Component' : '+ Add Requirement';
+
+    document.querySelectorAll('.requirement-ml-component-wrap').forEach(el => {
+        el.classList.toggle('hidden', !isForecast);
+    });
 
     if (isForecast && document.getElementById('requirements-list').children.length === 0) {
         addRequirementPreset('midterm_1');
@@ -422,10 +448,19 @@ function addRequirement(preset = null) {
     const scorePlaceholder = getScorePlaceholder(getDefaultScoreTotal());
     const presetName = preset && preset.name ? escapeHtml(String(preset.name)) : '';
     const presetWeight = preset && !isNaN(Number(preset.weight)) ? String(Number(preset.weight)) : '';
+    const presetScore = preset && preset.default_score !== undefined && preset.default_score !== null
+        ? escapeHtml(String(preset.default_score))
+        : '';
+    const fk = preset && preset.component_key ? preset.component_key : null;
+    const compHtml = buildMlComponentSelect(fk);
     div.innerHTML = `
+        <div class="requirement-ml-component-wrap hidden">
+            <label class="requirement-ml-label">Component</label>
+            <select class="requirement-component-key factor-add-select" aria-label="Component type for ML">${compHtml}</select>
+        </div>
         <div class="requirement-main">
-            <input type="text" placeholder="Item name (e.g. Midterm 1)" class="requirement-name" aria-label="Requirement name" value="${presetName}">
-            <input type="text" placeholder="${scorePlaceholder}" class="requirement-score" aria-label="Your score" oninput="updateRequirementPreview(${requirementCount})" onblur="normalizeRequirementScore(${requirementCount})">
+            <input type="text" placeholder="Item name (optional)" class="requirement-name" aria-label="Requirement name" value="${presetName}">
+            <input type="text" placeholder="${scorePlaceholder}" class="requirement-score" aria-label="Your score" value="${presetScore}" oninput="updateRequirementPreview(${requirementCount})" onblur="normalizeRequirementScore(${requirementCount})">
             <input type="number" placeholder="Weight %" min="0" max="100" step="0.1" class="requirement-weight" aria-label="Weight percent" value="${presetWeight}">
             <label class="extra-credit-check">
                 <input type="checkbox" class="requirement-extra">
@@ -461,6 +496,7 @@ function addRequirement(preset = null) {
     document.getElementById('requirements-list').appendChild(div);
     document.getElementById('requirements-hint').style.display = 'none';
     updateRequirementCurveStatsVisibility();
+    updatePredictionEngineUI();
 }
 
 function getScorePlaceholder(defaultTotal) {
@@ -621,6 +657,7 @@ async function submitPrediction() {
     const requirements = [];
     let weightedTotal = 0;
     let totalWeight = 0;
+    const predictionEngine = document.getElementById('prediction-engine').value || 'syllabus';
     const reqRows = document.querySelectorAll('.requirement-row');
     reqRows.forEach(row => {
         const name = row.querySelector('.requirement-name').value.trim() || 'Unnamed';
@@ -628,8 +665,14 @@ async function submitPrediction() {
         const score = parseScoreToPercent(scoreRaw, getDefaultScoreTotal());
         const weight = parseFloat(row.querySelector('.requirement-weight').value);
         const isExtraCredit = row.querySelector('.requirement-extra').checked;
+        const ckEl = row.querySelector('.requirement-component-key');
+        const componentKey = ckEl ? String(ckEl.value || '').trim() : '';
         if (score !== null && !isNaN(weight) && weight > 0) {
-            requirements.push({ name, score, weight, is_extra_credit: isExtraCredit });
+            const rowPayload = { name, score, weight, is_extra_credit: isExtraCredit };
+            if (predictionEngine === 'performance_ml' && componentKey) {
+                rowPayload.component_key = componentKey;
+            }
+            requirements.push(rowPayload);
             weightedTotal += score * weight;
             totalWeight += weight;
         }
@@ -1026,17 +1069,32 @@ function displayResults(data, study, attend, assign, requirementWeightSum) {
         srcNote.textContent = `Final score engine: Performance ML forecast.${baseTxt}`;
         srcNote.classList.remove('hidden');
     } else if (data.prediction_source === 'weighted_requirements') {
-        srcNote.textContent =
-            data.prediction_engine === 'performance_ml'
-                ? 'Performance forecast selected but ML did not run; using syllabus weighted score from your entered components.'
-                : 'Final score engine: Syllabus weighted score from your entered components.';
+        if (data.prediction_engine === 'performance_ml') {
+            const st = data.ml_status || '';
+            const hints = {
+                model_missing: 'ML model not loaded on this server.',
+                no_classified_components: 'Select a Component type on each row, or use Syllabus engine.',
+                no_remaining_weight: 'Your weights already total 100%; nothing left for ML to fill.',
+                predict_error: 'ML prediction failed — try again or use Syllabus weighted score.',
+            };
+            srcNote.textContent = hints[st] || 'Performance forecast unavailable; using syllabus weighted score.';
+        } else {
+            srcNote.textContent = 'Final score engine: Syllabus weighted score from your entered components.';
+        }
         srcNote.classList.remove('hidden');
     } else {
         srcNote.textContent = '';
         srcNote.classList.add('hidden');
     }
     const knownWeight = Number(data.known_weight_percent ?? requirementWeightSum ?? 0);
-    if (data.prediction_source === 'weighted_requirements' && !isNaN(knownWeight) && knownWeight > 0 && knownWeight < 99.99) {
+    const predEngine = data.prediction_engine || 'syllabus';
+    const mlOk = data.ml_status === 'ok';
+
+    if (predEngine === 'performance_ml' && mlOk && data.ml_remaining_weight_percent != null && data.ml_predicted_final_score != null && data.ml_overall_percent != null) {
+        const rw = Number(data.ml_remaining_weight_percent);
+        completionNote.textContent = `Remaining ${rw.toFixed(1)}% filled with predicted final (${data.ml_predicted_final_score}%) → Overall ${data.ml_overall_percent}%.`;
+        completionNote.classList.remove('hidden');
+    } else if (data.prediction_source === 'weighted_requirements' && !isNaN(knownWeight) && knownWeight > 0 && knownWeight < 99.99) {
         completionNote.textContent = `Components entered: ${knownWeight.toFixed(1)}% of syllabus. Overall projection currently treats remaining ${Math.max(0, 100 - knownWeight).toFixed(1)}% as 0.`;
         completionNote.classList.remove('hidden');
     } else if (!isNaN(knownWeight) && knownWeight >= 99.99) {
