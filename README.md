@@ -19,11 +19,11 @@ The ML engine only runs on the Render deployment (it needs the trained `*.pkl` a
 
 Different classes use different grading rules and scales:
 
-- some use `0-100`, some use `0-10`, some grade items as `29/30` points,
+- many items are graded on a `0-100` scale, or as raw points like `29/30`,
 - some weight components flat, some apply a curve,
 - some are still missing one or more components when you want to project your final grade.
 
-This app normalizes inputs (plain number, fraction like `17/20`, or percent like `85%`), applies the syllabus weights you provide, and either reports your current Overall or predicts the missing slot with ML before reporting it.
+This app normalizes each row to a **0–100%** score (plain number as out of 100, fraction like `17/20`, or percent like `85%`), applies the syllabus weights you provide, and either reports your current Overall or predicts the missing slot with ML before reporting it.
 
 ## Features
 

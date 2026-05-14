@@ -567,7 +567,7 @@ function parseScoreToBase(rawValue, defaultTotal = 100) {
     return Math.max(0, val);
 }
 
-/** Fixed 100-point scale for syllabus-style inputs (no configurable /10 vs /100). */
+/** Plain scores are read as out of 100; fractions use their own denominator (e.g. 17/20). */
 function getDefaultScoreTotal() {
     return 100;
 }
@@ -581,7 +581,7 @@ function updateRequirementPreview(id) {
     const pct = parseScoreToPercent(raw, getDefaultScoreTotal());
     if (base === null || pct === null) {
         const denom = getDefaultScoreTotal();
-        preview.textContent = `Invalid input. Enter a number from 0 to ${denom}, a fraction (e.g. 8/10), or a percent.`;
+        preview.textContent = `Invalid input. Enter a number from 0 to ${denom}, a fraction (e.g. 17/20), or a percent.`;
         preview.classList.add('preview-error');
     } else {
         const denom = getDefaultScoreTotal();
